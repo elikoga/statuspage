@@ -33,6 +33,11 @@ def perform_db_upgrade():
 async def lifespan(app: FastAPI):
     logger.info("starting up")
     perform_db_upgrade()
+    logging.basicConfig(
+        force=True,
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
 
     from statuspage.database.connection import create_sqlalchemy_engine
 

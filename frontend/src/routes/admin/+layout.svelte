@@ -11,7 +11,8 @@
 			<h1 class="text-xl font-bold text-gray-900">Admin</h1>
 			<div class="flex items-center gap-4">
 				<span class="text-sm text-gray-500">{data.username}</span>
-				<a href="/" class="text-sm text-blue-600 hover:underline">View public page</a>
+				<a href="/" class="text-sm text-blue-600 hover:underline">Public page</a>
+				<a href="/private" class="text-sm text-blue-600 hover:underline">Private page</a>
 				<form method="POST" action="/logout" use:enhance>
 					<button type="submit" class="text-sm text-gray-500 hover:text-gray-800">Sign out</button>
 				</form>

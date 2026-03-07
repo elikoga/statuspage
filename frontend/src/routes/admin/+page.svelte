@@ -171,16 +171,25 @@
 							{:else}
 								<div class="flex items-center justify-between">
 								<div>
-									<span class="font-medium text-gray-900">{service.name}</span>
+									{#if (service as {site_url?: string | null}).site_url || ((service as {url?: string | null}).url ?? '').startsWith('https://')}
+										<a
+											href={(service as {site_url?: string | null}).site_url ?? (service as {url?: string | null}).url}
+											target="_blank"
+											rel="noopener noreferrer"
+											class="font-medium text-gray-900 hover:underline"
+										>{service.name}</a>
+									{:else}
+										<span class="font-medium text-gray-900">{service.name}</span>
+									{/if}
 									{#if service.description}
 										<p class="text-xs text-gray-500">{service.description}</p>
 									{/if}
 									{#if (service as {group?: string | null}).group}
 										<p class="text-xs text-gray-400 mt-0.5">Group: {(service as {group?: string | null}).group}</p>
 									{/if}
-							{#if (service as {site_url?: string | null}).site_url}
-								<p class="text-xs text-gray-400 mt-0.5">Site: {(service as {site_url?: string | null}).site_url}</p>
-							{/if}
+								{#if (service as {site_url?: string | null}).site_url}
+									<p class="text-xs mt-0.5"><a href={(service as {site_url?: string | null}).site_url} target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">{(service as {site_url?: string | null}).site_url}</a></p>
+								{/if}
 									{#if (service as {last_checked_at?: string | null}).last_checked_at}
 										<p class="text-xs text-gray-400">Last checked: {new Date((service as {last_checked_at?: string | null}).last_checked_at!).toLocaleTimeString()}</p>
 									{/if}
