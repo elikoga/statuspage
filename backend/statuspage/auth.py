@@ -1,6 +1,10 @@
 import datetime
+import logging
+import pathlib
 import secrets
 from typing import Any
+
+_log = logging.getLogger(__name__)
 
 SESSION_DURATION = datetime.timedelta(days=7)
 COOKIE_NAME = "session-token"
@@ -13,19 +17,29 @@ _password: str | None = None
 _username: str = "admin"
 
 
-def init(username: str, password: str | None) -> None:
+def init(username: str, password: str | None, data_path: pathlib.Path) -> None:
     global _password, _username
     _username = username
     if password:
         _password = password
-    else:
-        _password = secrets.token_urlsafe(16)
-        import logging
+        return
 
-        logging.getLogger(__name__).warning(
-            "STATUSPAGE_ADMIN_PASSWORD not set — generated password: %s", _password
-        )
+    password_file = data_path / "admin-password"
+    if password_file.exists():
+        _password = password_file.read_text().strip()
+        _log.info("loaded admin password from %s", password_file)
+        return
 
+    # First run: generate, persist, announce.
+    data_path.mkdir(parents=True, exist_ok=True)
+    _password = secrets.token_urlsafe(32)
+    password_file.write_text(_password)
+    password_file.chmod(0o600)
+    _log.warning(
+        "STATUSPAGE_ADMIN_PASSWORD not set — generated password written to %s: %s",
+        password_file,
+        _password,
+    )
 
 def verify(username: str, password: str) -> bool:
     return username == _username and _password is not None and password == _password

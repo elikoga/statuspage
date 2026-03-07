@@ -36,7 +36,7 @@ async def lifespan(app: FastAPI):
 
     from statuspage import auth as _auth
 
-    _auth.init(global_settings.ADMIN_USERNAME, global_settings.ADMIN_PASSWORD)
+    _auth.init(global_settings.ADMIN_USERNAME, global_settings.ADMIN_PASSWORD, global_settings.DATA_PATH)
     # expose the engine on the app state so get_db() can reach it
     from statuspage.database.connection import create_sqlalchemy_engine
 
