@@ -18,3 +18,4 @@ build/
 # Misc
 .DS_Store
 *.sqlite
+result
