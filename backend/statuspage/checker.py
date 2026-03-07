@@ -32,11 +32,10 @@ async def run_checks(db_engine) -> None:
     # Phase 1: read service list, then release the connection immediately.
     with Session(db_engine) as session:
         rows = (
-            session.query(Service.id, Service.name, Service.url)
+            session.query(Service.id, Service.name, Service.url, Service.status)
             .filter(
                 Service.url.isnot(None),
                 Service.check_enabled.is_(True),
-                Service.status != ServiceStatus.offline,
             )
             .all()
         )
@@ -44,28 +43,33 @@ async def run_checks(db_engine) -> None:
         return
 
     # Phase 2: run all HTTP checks with no DB connection held.
-    targets = [(row.id, row.name, row.url) for row in rows]
+    targets = [(row.id, row.name, row.url, row.status) for row in rows]
     async with httpx.AsyncClient(
         timeout=httpx.Timeout(10.0),
         follow_redirects=True,
     ) as client:
         results = await asyncio.gather(
-            *[_check_one(client, name, url) for _, name, url in targets],
+            *[_check_one(client, name, url) for _, name, url, _ in targets],
             return_exceptions=True,
         )
 
     # Phase 3: write results; acquire connection only now.
     now = datetime.datetime.utcnow()
     with Session(db_engine) as session:
-        for (svc_id, svc_name, _), result in zip(targets, results):
+        for (svc_id, svc_name, _, prior_status), result in zip(targets, results):
             svc = session.get(Service, svc_id)
             if svc is None:
                 continue
             if isinstance(result, Exception):
                 _log.error("check task for %s raised: %s", svc_name, result)
-                svc.status = ServiceStatus.outage
+                new_status = ServiceStatus.outage
             else:
-                svc.status = result
+                new_status = result
+            # A failed check on an offline service keeps it offline rather
+            # than escalating to outage — the downtime is intentional.
+            if new_status == ServiceStatus.outage and prior_status == ServiceStatus.offline:
+                new_status = ServiceStatus.offline
+            svc.status = new_status
             svc.last_checked_at = now
         session.commit()
     _log.info("checked %d services", len(targets))
