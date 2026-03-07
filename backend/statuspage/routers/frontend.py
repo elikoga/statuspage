@@ -72,12 +72,11 @@ class Frontend:
         self.stopped = False
 
     async def run(self):
-        frontend_path = pathlib.Path(__file__).parent.parent.parent.parent / "frontend"
-        assert (
-            frontend_path.exists()
-        ), f"frontend path {frontend_path} does not exist"
-
         if is_reload_enabled() and not frontend_binary_path():
+            frontend_path = pathlib.Path(__file__).parent.parent.parent.parent / "frontend"
+            assert (
+                frontend_path.exists()
+            ), f"frontend path {frontend_path} does not exist"
             self.process = await asyncio.create_subprocess_exec(
                 "npm",
                 "run",
@@ -97,6 +96,10 @@ class Frontend:
                 },
             )
         elif not frontend_binary_path():
+            frontend_path = pathlib.Path(__file__).parent.parent.parent.parent / "frontend"
+            assert (
+                frontend_path.exists()
+            ), f"frontend path {frontend_path} does not exist"
             self.process = await asyncio.create_subprocess_exec(
                 "sh",
                 "-c",
