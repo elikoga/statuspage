@@ -58,6 +58,7 @@ in
       wants = [ "network-online.target" ];
       after = [ "network-online.target" ];
 
+      path = with pkgs; [ bash coreutils curl openssh nix python3 "/run/current-system/sw" ];
       script =
         let
           tokenLoader = lib.optionalString (cfg.telegram-bot-token-file != null) ''
@@ -83,6 +84,7 @@ in
       } // lib.optionalAttrs (cfg.telegram-chat-id != null) {
         STATUSPAGE_TELEGRAM_CHAT_ID = cfg.telegram-chat-id;
       };
+
     };
 
     services.nginx = {
