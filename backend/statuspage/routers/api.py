@@ -1,7 +1,7 @@
 import datetime
 import uuid
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -33,6 +33,7 @@ class ServiceCreate(BaseModel):
     status: ServiceStatus = ServiceStatus.operational
     group: str | None = None
     check_enabled: bool = True
+    is_public: bool = True
 
 
 class ServiceUpdate(BaseModel):
@@ -42,6 +43,7 @@ class ServiceUpdate(BaseModel):
     status: ServiceStatus | None = None
     group: str | None = None
     check_enabled: bool | None = None
+    is_public: bool | None = None
 
 
 class ServiceOut(BaseModel):
@@ -54,14 +56,23 @@ class ServiceOut(BaseModel):
     updated_at: datetime.datetime
     group: str | None
     check_enabled: bool
+    is_public: bool
     last_checked_at: datetime.datetime | None
 
     model_config = {"from_attributes": True}
 
 
 @router.get("/services", response_model=list[ServiceOut])
-def list_services(db: Session = Depends(get_db)):
-    return db.query(Service).order_by(Service.created_at).all()
+def list_services(
+    db: Session = Depends(get_db),
+    session_token: str | None = Cookie(default=None, alias="session-token"),
+    include_private: bool = Query(default=False),
+):
+    if include_private:
+        if not session_token or not _auth.get_session(session_token):
+            raise HTTPException(status_code=401, detail="Not authenticated")
+        return db.query(Service).order_by(Service.created_at).all()
+    return db.query(Service).filter(Service.is_public.is_(True)).order_by(Service.created_at).all()
 
 
 @router.post("/services", response_model=ServiceOut, status_code=201)
@@ -74,6 +85,7 @@ def create_service(body: ServiceCreate, db: Session = Depends(get_db), _user: st
         status=body.status,
         group=body.group,
         check_enabled=body.check_enabled,
+        is_public=body.is_public,
         created_at=datetime.datetime.utcnow(),
         updated_at=datetime.datetime.utcnow(),
     )
@@ -106,10 +118,12 @@ def update_service(
         service.url = body.url
     if body.status is not None:
         service.status = body.status
-    if body.group is not None:
+    if "group" in body.model_fields_set:
         service.group = body.group
     if body.check_enabled is not None:
         service.check_enabled = body.check_enabled
+    if body.is_public is not None:
+        service.is_public = body.is_public
     service.updated_at = datetime.datetime.utcnow()
     db.commit()
     db.refresh(service)

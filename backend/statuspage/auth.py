@@ -4,22 +4,25 @@ import pathlib
 import secrets
 from typing import Any
 
+from sqlalchemy import delete
+from sqlalchemy.orm import Session
+
 _log = logging.getLogger(__name__)
 
 SESSION_DURATION = datetime.timedelta(days=7)
 COOKIE_NAME = "session-token"
 
-# token -> {username, expires_at}
-_sessions: dict[str, dict[str, Any]] = {}
-
 # Set during lifespan startup; never None after that.
 _password: str | None = None
 _username: str = "admin"
+_db_engine = None  # populated by auth.init()
 
 
-def init(username: str, password: str | None, data_path: pathlib.Path) -> None:
-    global _password, _username
+def init(username: str, password: str | None, data_path: pathlib.Path, db_engine=None) -> None:
+    global _password, _username, _db_engine
     _username = username
+    _db_engine = db_engine
+
     if password:
         _password = password
         return
@@ -41,36 +44,62 @@ def init(username: str, password: str | None, data_path: pathlib.Path) -> None:
         _password,
     )
 
+
 def verify(username: str, password: str) -> bool:
     return username == _username and _password is not None and password == _password
 
 
 def create_session(username: str) -> str:
+    from statuspage.database.models import SessionStore
+
     token = secrets.token_urlsafe(32)
-    _sessions[token] = {
-        "username": username,
-        "expires_at": datetime.datetime.utcnow() + SESSION_DURATION,
-    }
+    expires_at = datetime.datetime.utcnow() + SESSION_DURATION
+    with Session(_db_engine) as session:
+        session.add(SessionStore(token=token, username=username, expires_at=expires_at))
+        session.commit()
     return token
 
 
 def get_session(token: str) -> dict[str, Any] | None:
-    entry = _sessions.get(token)
-    if entry is None:
-        return None
-    if datetime.datetime.utcnow() > entry["expires_at"]:
-        del _sessions[token]
-        return None
-    return entry
+    from statuspage.database.models import SessionStore
+
+    with Session(_db_engine) as session:
+        entry = session.get(SessionStore, token)
+        if entry is None:
+            return None
+        if datetime.datetime.utcnow() > entry.expires_at:
+            session.delete(entry)
+            session.commit()
+            return None
+        return {"username": entry.username, "expires_at": entry.expires_at}
 
 
 def delete_session(token: str) -> None:
-    _sessions.pop(token, None)
+    from statuspage.database.models import SessionStore
 
+    with Session(_db_engine) as session:
+        entry = session.get(SessionStore, token)
+        if entry:
+            session.delete(entry)
+            session.commit()
+
+
+def purge_expired_sessions() -> int:
+    """Delete all expired sessions. Returns count deleted."""
+    from statuspage.database.models import SessionStore
+
+    now = datetime.datetime.utcnow()
+    with Session(_db_engine) as session:
+        result = session.execute(
+            delete(SessionStore).where(SessionStore.expires_at < now)
+        )
+        session.commit()
+        return result.rowcount
 
 
 # ---------------------------------------------------------------------------
 # OIDC state store (short-lived; state token -> payload)
+# In-memory is acceptable here: 10-minute TTL, low security impact if lost on restart.
 # ---------------------------------------------------------------------------
 
 _OIDC_STATE_TTL = datetime.timedelta(minutes=10)

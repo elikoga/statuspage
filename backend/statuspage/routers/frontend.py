@@ -146,7 +146,7 @@ class Frontend:
                         if re.search(
                             r"Listening on http(s)?://\d+\.\d+\.\d+\.\d+:\d+",
                             line.decode("utf-8"),
-                        ):
+                        ) or re.search(r"Local: +http", line.decode("utf-8")):
                             self.started.set()
                             break
                         elif re.search(

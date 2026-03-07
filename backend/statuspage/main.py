@@ -34,15 +34,14 @@ async def lifespan(app: FastAPI):
     logger.info("starting up")
     perform_db_upgrade()
 
-    from statuspage import auth as _auth
-
-    _auth.init(global_settings.ADMIN_USERNAME, global_settings.ADMIN_PASSWORD, global_settings.DATA_PATH)
-    # expose the engine on the app state so get_db() can reach it
     from statuspage.database.connection import create_sqlalchemy_engine
 
     app.state.db_engine = create_sqlalchemy_engine()
     import statuspage.main as _self
 
+    from statuspage import auth as _auth
+
+    _auth.init(global_settings.ADMIN_USERNAME, global_settings.ADMIN_PASSWORD, global_settings.DATA_PATH, db_engine=app.state.db_engine)
     _self.db_engine = app.state.db_engine
 
     logger.info("starting frontend")
@@ -53,9 +52,15 @@ async def lifespan(app: FastAPI):
     _checker_task = asyncio.create_task(
         _checker.health_check_loop(app.state.db_engine, global_settings.CHECK_INTERVAL_SECONDS)
     )
+    _purge_task = asyncio.create_task(_session_purge_loop())
 
     yield
 
+    _purge_task.cancel()
+    try:
+        await _purge_task
+    except asyncio.CancelledError:
+        pass
     _checker_task.cancel()
     try:
         await _checker_task
@@ -85,6 +90,21 @@ app.include_router(frontend.router)  # catch-all — must be last
 db_engine = None
 
 
+
+
+async def _session_purge_loop() -> None:
+    """Purge expired sessions from the DB once per hour."""
+    while True:
+        try:
+            await asyncio.sleep(3600)
+            from statuspage import auth as _auth
+            count = _auth.purge_expired_sessions()
+            if count:
+                logger.info("purged %d expired session(s)", count)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("error purging expired sessions")
 def main():
     import uvicorn
 

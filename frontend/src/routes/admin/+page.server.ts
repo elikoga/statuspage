@@ -3,7 +3,7 @@ import { fail } from '@sveltejs/kit';
 
 export const load: PageServerLoad = async ({ fetch }) => {
 	const [servicesRes, incidentsRes] = await Promise.all([
-		fetch('/api/services'),
+		fetch('/api/services?include_private=true'),
 		fetch('/api/incidents')
 	]);
 	return {
@@ -23,7 +23,9 @@ export const actions: Actions = {
 				description: data.get('description') || null,
 				url: data.get('url') || null,
 				group: data.get('group') || null,
-				status: data.get('status') || 'operational'
+				status: data.get('status') || 'operational',
+				is_public: data.get('is_public') === 'true',
+				check_enabled: data.get('check_enabled') === 'true'
 			})
 		});
 		if (!res.ok) return fail(res.status, { error: await res.text() });
@@ -39,8 +41,10 @@ export const actions: Actions = {
 				name: data.get('name') || undefined,
 				description: data.get('description') || undefined,
 				url: data.get('url') || undefined,
-				group: data.get('group') ?? undefined,
-				status: data.get('status') || undefined
+				group: data.get('group') || null,
+				status: data.get('status') || undefined,
+				is_public: data.get('is_public') === 'true',
+				check_enabled: data.get('check_enabled') === 'true'
 			})
 		});
 		if (!res.ok) return fail(res.status, { error: await res.text() });

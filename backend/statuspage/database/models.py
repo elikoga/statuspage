@@ -43,6 +43,7 @@ class Service(Base):
     group = Column(String, nullable=True)
     check_enabled = Column(Boolean, default=True, nullable=False)
     last_checked_at = Column(DateTime, nullable=True)
+    is_public = Column(Boolean, default=True, nullable=False)
 
 
 class Incident(Base):
@@ -63,3 +64,12 @@ class Incident(Base):
         onupdate=datetime.datetime.utcnow,
         nullable=False,
     )
+
+
+
+class SessionStore(Base):
+    __tablename__ = "session_store"
+
+    token = Column(String, primary_key=True)
+    username = Column(String, nullable=False)
+    expires_at = Column(DateTime, nullable=False)

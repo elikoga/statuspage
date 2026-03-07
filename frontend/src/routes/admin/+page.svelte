@@ -62,6 +62,16 @@
 					placeholder="Group (e.g. Personal)"
 					class="border border-gray-300 rounded px-3 py-2 text-sm"
 				/>
+				<div class="flex items-center gap-4 sm:col-span-4">
+					<label class="flex items-center gap-2 text-sm text-gray-700">
+						<input type="checkbox" name="is_public" value="true" checked class="rounded" />
+						Public
+					</label>
+					<label class="flex items-center gap-2 text-sm text-gray-700">
+						<input type="checkbox" name="check_enabled" value="true" checked class="rounded" />
+						Health check
+					</label>
+				</div>
 				<button
 					type="submit"
 					class="bg-blue-600 hover:bg-blue-700 text-white rounded px-4 py-2 text-sm font-medium"
@@ -114,6 +124,16 @@
 									placeholder="Group"
 									class="border border-gray-300 rounded px-3 py-1.5 text-sm sm:col-span-2"
 								/>
+								<div class="flex items-center gap-4 sm:col-span-4">
+									<label class="flex items-center gap-2 text-sm text-gray-700">
+										<input type="checkbox" name="is_public" value="true" checked={(editingService as {is_public?: boolean}).is_public !== false} class="rounded" />
+										Public
+									</label>
+									<label class="flex items-center gap-2 text-sm text-gray-700">
+										<input type="checkbox" name="check_enabled" value="true" checked={(editingService as {check_enabled?: boolean}).check_enabled !== false} class="rounded" />
+										Health check
+									</label>
+								</div>
 									<div class="flex gap-2">
 										<button
 											type="submit"
@@ -141,6 +161,12 @@
 									{#if (service as {last_checked_at?: string | null}).last_checked_at}
 										<p class="text-xs text-gray-400">Last checked: {new Date((service as {last_checked_at?: string | null}).last_checked_at!).toLocaleTimeString()}</p>
 									{/if}
+								{#if !(service as {is_public?: boolean}).is_public}
+									<span class="inline-block text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 mt-0.5">Private</span>
+								{/if}
+								{#if !(service as {check_enabled?: boolean}).check_enabled}
+									<span class="inline-block text-xs px-1.5 py-0.5 rounded bg-yellow-50 text-yellow-700 mt-0.5">Checks off</span>
+								{/if}
 								</div>
 									<div class="flex items-center gap-3">
 										<span class="text-sm {STATUS_COLOR[service.status]}">{service.status}</span>
