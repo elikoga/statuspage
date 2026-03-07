@@ -2,7 +2,7 @@ import datetime
 import enum
 import uuid
 
-from sqlalchemy import Column, DateTime, Enum, String, Text
+from sqlalchemy import Boolean, Column, DateTime, Enum, String, Text
 from sqlalchemy.orm import DeclarativeBase
 
 
@@ -40,6 +40,9 @@ class Service(Base):
         onupdate=datetime.datetime.utcnow,
         nullable=False,
     )
+    group = Column(String, nullable=True)
+    check_enabled = Column(Boolean, default=True, nullable=False)
+    last_checked_at = Column(DateTime, nullable=True)
 
 
 class Incident(Base):

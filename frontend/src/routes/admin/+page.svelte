@@ -55,7 +55,12 @@
 				<input
 					name="url"
 					placeholder="URL (optional)"
-					class="border border-gray-300 rounded px-3 py-2 text-sm sm:col-span-3"
+					class="border border-gray-300 rounded px-3 py-2 text-sm sm:col-span-2"
+				/>
+				<input
+					name="group"
+					placeholder="Group (e.g. Personal)"
+					class="border border-gray-300 rounded px-3 py-2 text-sm"
 				/>
 				<button
 					type="submit"
@@ -97,12 +102,18 @@
 											<option value={s} selected={s === editingService.status}>{s}</option>
 										{/each}
 									</select>
-									<input
-										name="url"
-										value={editingService.url ?? ''}
-										placeholder="URL"
-										class="border border-gray-300 rounded px-3 py-1.5 text-sm sm:col-span-3"
-									/>
+								<input
+									name="url"
+									value={editingService.url ?? ''}
+									placeholder="URL"
+									class="border border-gray-300 rounded px-3 py-1.5 text-sm sm:col-span-2"
+								/>
+								<input
+									name="group"
+									value={(editingService as {group?: string | null}).group ?? ''}
+									placeholder="Group"
+									class="border border-gray-300 rounded px-3 py-1.5 text-sm sm:col-span-2"
+								/>
 									<div class="flex gap-2">
 										<button
 											type="submit"
@@ -119,12 +130,18 @@
 								</form>
 							{:else}
 								<div class="flex items-center justify-between">
-									<div>
-										<span class="font-medium text-gray-900">{service.name}</span>
-										{#if service.description}
-											<p class="text-xs text-gray-500">{service.description}</p>
-										{/if}
-									</div>
+								<div>
+									<span class="font-medium text-gray-900">{service.name}</span>
+									{#if service.description}
+										<p class="text-xs text-gray-500">{service.description}</p>
+									{/if}
+									{#if (service as {group?: string | null}).group}
+										<p class="text-xs text-gray-400 mt-0.5">Group: {(service as {group?: string | null}).group}</p>
+									{/if}
+									{#if (service as {last_checked_at?: string | null}).last_checked_at}
+										<p class="text-xs text-gray-400">Last checked: {new Date((service as {last_checked_at?: string | null}).last_checked_at!).toLocaleTimeString()}</p>
+									{/if}
+								</div>
 									<div class="flex items-center gap-3">
 										<span class="text-sm {STATUS_COLOR[service.status]}">{service.status}</span>
 										<button

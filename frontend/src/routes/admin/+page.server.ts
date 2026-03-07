@@ -22,6 +22,7 @@ export const actions: Actions = {
 				name: data.get('name'),
 				description: data.get('description') || null,
 				url: data.get('url') || null,
+				group: data.get('group') || null,
 				status: data.get('status') || 'operational'
 			})
 		});
@@ -38,6 +39,7 @@ export const actions: Actions = {
 				name: data.get('name') || undefined,
 				description: data.get('description') || undefined,
 				url: data.get('url') || undefined,
+				group: data.get('group') ?? undefined,
 				status: data.get('status') || undefined
 			})
 		});

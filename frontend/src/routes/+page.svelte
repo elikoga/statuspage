@@ -5,7 +5,7 @@
 
 	const STATUS_LABEL: Record<string, string> = {
 		operational: 'Operational',
-		degraded: 'Degraded Performance',
+		degraded: 'Degraded',
 		outage: 'Outage'
 	};
 
@@ -29,6 +29,14 @@
 		resolved: 'bg-green-100 text-green-800'
 	};
 
+	function checkedAgo(ts: string | null): string | null {
+		if (!ts) return null;
+		const diff = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
+		if (diff < 120) return 'just now';
+		if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+		return `${Math.floor(diff / 3600)}h ago`;
+	}
+
 	const openIncidents = $derived(
 		data.incidents.filter((i: { status: string }) => i.status !== 'resolved')
 	);
@@ -37,6 +45,17 @@
 		if (data.services.some((s: { status: string }) => s.status === 'outage')) return 'outage';
 		if (data.services.some((s: { status: string }) => s.status === 'degraded')) return 'degraded';
 		return 'operational';
+	});
+
+	// Group services preserving insertion order of group names.
+	const serviceGroups = $derived(() => {
+		const groups = new Map<string, typeof data.services>();
+		for (const svc of data.services) {
+			const g = (svc as { group?: string | null }).group ?? 'Other';
+			if (!groups.has(g)) groups.set(g, []);
+			groups.get(g)!.push(svc);
+		}
+		return groups;
 	});
 </script>
 
@@ -99,24 +118,46 @@
 			</section>
 		{/if}
 
-		<!-- Services -->
+		<!-- Services grouped -->
 		<section>
-			<h2 class="text-lg font-semibold text-gray-800 mb-3">Services</h2>
+			<h2 class="text-lg font-semibold text-gray-800 mb-4">Services</h2>
 			{#if data.services.length === 0}
 				<p class="text-gray-500 text-sm">No services configured yet.</p>
 			{:else}
-				<div class="bg-white rounded-lg border border-gray-200 divide-y divide-gray-100">
-					{#each data.services as service (service.id)}
-						<div class="flex items-center justify-between px-4 py-3">
-							<div>
-								<span class="font-medium text-gray-900">{service.name}</span>
-								{#if service.description}
-									<p class="text-xs text-gray-500 mt-0.5">{service.description}</p>
-								{/if}
-							</div>
-							<div class="flex items-center gap-2">
-								<span class="h-2.5 w-2.5 rounded-full {STATUS_COLOR[service.status]}"></span>
-								<span class="text-sm text-gray-600">{STATUS_LABEL[service.status]}</span>
+				<div class="space-y-5">
+					{#each [...serviceGroups()] as [groupName, groupServices]}
+						<div>
+							<h3
+								class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 px-1"
+							>
+								{groupName}
+							</h3>
+							<div
+								class="bg-white rounded-lg border border-gray-200 divide-y divide-gray-100"
+							>
+								{#each groupServices as service (service.id)}
+									<div class="flex items-center justify-between px-4 py-3">
+										<div>
+											<span class="font-medium text-gray-900">{service.name}</span>
+											{#if service.description}
+												<p class="text-xs text-gray-500 mt-0.5">{service.description}</p>
+											{/if}
+											{#if checkedAgo((service as { last_checked_at?: string | null }).last_checked_at ?? null)}
+												<p class="text-xs text-gray-400 mt-0.5">
+													Checked {checkedAgo((service as { last_checked_at?: string | null }).last_checked_at ?? null)}
+												</p>
+											{/if}
+										</div>
+										<div class="flex items-center gap-2 shrink-0 ml-4">
+											<span
+												class="h-2.5 w-2.5 rounded-full {STATUS_COLOR[service.status]}"
+											></span>
+											<span class="text-sm text-gray-600"
+												>{STATUS_LABEL[service.status]}</span
+											>
+										</div>
+									</div>
+								{/each}
 							</div>
 						</div>
 					{/each}

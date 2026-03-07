@@ -49,7 +49,18 @@ async def lifespan(app: FastAPI):
     await frontend.frontend.run()
     logger.info("frontend started at %s", global_settings.BASE_URL)
 
+    from statuspage import checker as _checker
+    _checker_task = asyncio.create_task(
+        _checker.health_check_loop(app.state.db_engine, global_settings.CHECK_INTERVAL_SECONDS)
+    )
+
     yield
+
+    _checker_task.cancel()
+    try:
+        await _checker_task
+    except asyncio.CancelledError:
+        pass
 
     logger.info("stopping frontend")
     await frontend.frontend.stop()

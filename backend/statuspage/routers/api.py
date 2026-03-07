@@ -1,14 +1,26 @@
 import datetime
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Cookie, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from statuspage.database.connection import get_db
 from statuspage.database.models import Incident, IncidentStatus, Service, ServiceStatus
+from statuspage import auth as _auth
 
 router = APIRouter(tags=["api"])
+
+
+def require_auth(
+    session_token: str | None = Cookie(default=None, alias="session-token"),
+) -> str:
+    if not session_token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    entry = _auth.get_session(session_token)
+    if not entry:
+        raise HTTPException(status_code=401, detail="Session expired or invalid")
+    return entry["username"]
 
 
 # ── Services ──────────────────────────────────────────────────────────────────
@@ -19,6 +31,8 @@ class ServiceCreate(BaseModel):
     description: str | None = None
     url: str | None = None
     status: ServiceStatus = ServiceStatus.operational
+    group: str | None = None
+    check_enabled: bool = True
 
 
 class ServiceUpdate(BaseModel):
@@ -26,6 +40,8 @@ class ServiceUpdate(BaseModel):
     description: str | None = None
     url: str | None = None
     status: ServiceStatus | None = None
+    group: str | None = None
+    check_enabled: bool | None = None
 
 
 class ServiceOut(BaseModel):
@@ -36,6 +52,9 @@ class ServiceOut(BaseModel):
     status: ServiceStatus
     created_at: datetime.datetime
     updated_at: datetime.datetime
+    group: str | None
+    check_enabled: bool
+    last_checked_at: datetime.datetime | None
 
     model_config = {"from_attributes": True}
 
@@ -46,13 +65,15 @@ def list_services(db: Session = Depends(get_db)):
 
 
 @router.post("/services", response_model=ServiceOut, status_code=201)
-def create_service(body: ServiceCreate, db: Session = Depends(get_db)):
+def create_service(body: ServiceCreate, db: Session = Depends(get_db), _user: str = Depends(require_auth)):
     service = Service(
         id=str(uuid.uuid4()),
         name=body.name,
         description=body.description,
         url=body.url,
         status=body.status,
+        group=body.group,
+        check_enabled=body.check_enabled,
         created_at=datetime.datetime.utcnow(),
         updated_at=datetime.datetime.utcnow(),
     )
@@ -72,7 +93,7 @@ def get_service(service_id: str, db: Session = Depends(get_db)):
 
 @router.patch("/services/{service_id}", response_model=ServiceOut)
 def update_service(
-    service_id: str, body: ServiceUpdate, db: Session = Depends(get_db)
+    service_id: str, body: ServiceUpdate, db: Session = Depends(get_db), _user: str = Depends(require_auth)
 ):
     service = db.query(Service).filter(Service.id == service_id).first()
     if not service:
@@ -85,6 +106,10 @@ def update_service(
         service.url = body.url
     if body.status is not None:
         service.status = body.status
+    if body.group is not None:
+        service.group = body.group
+    if body.check_enabled is not None:
+        service.check_enabled = body.check_enabled
     service.updated_at = datetime.datetime.utcnow()
     db.commit()
     db.refresh(service)
@@ -92,7 +117,7 @@ def update_service(
 
 
 @router.delete("/services/{service_id}", status_code=204)
-def delete_service(service_id: str, db: Session = Depends(get_db)):
+def delete_service(service_id: str, db: Session = Depends(get_db), _user: str = Depends(require_auth)):
     service = db.query(Service).filter(Service.id == service_id).first()
     if not service:
         raise HTTPException(status_code=404, detail="Service not found")
@@ -132,7 +157,7 @@ def list_incidents(db: Session = Depends(get_db)):
 
 
 @router.post("/incidents", response_model=IncidentOut, status_code=201)
-def create_incident(body: IncidentCreate, db: Session = Depends(get_db)):
+def create_incident(body: IncidentCreate, db: Session = Depends(get_db), _user: str = Depends(require_auth)):
     incident = Incident(
         id=str(uuid.uuid4()),
         title=body.title,
@@ -157,7 +182,7 @@ def get_incident(incident_id: str, db: Session = Depends(get_db)):
 
 @router.patch("/incidents/{incident_id}", response_model=IncidentOut)
 def update_incident(
-    incident_id: str, body: IncidentUpdate, db: Session = Depends(get_db)
+    incident_id: str, body: IncidentUpdate, db: Session = Depends(get_db), _user: str = Depends(require_auth)
 ):
     incident = db.query(Incident).filter(Incident.id == incident_id).first()
     if not incident:
@@ -175,7 +200,7 @@ def update_incident(
 
 
 @router.delete("/incidents/{incident_id}", status_code=204)
-def delete_incident(incident_id: str, db: Session = Depends(get_db)):
+def delete_incident(incident_id: str, db: Session = Depends(get_db), _user: str = Depends(require_auth)):
     incident = db.query(Incident).filter(Incident.id == incident_id).first()
     if not incident:
         raise HTTPException(status_code=404, detail="Incident not found")
