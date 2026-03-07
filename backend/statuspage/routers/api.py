@@ -2,7 +2,7 @@ import datetime
 import uuid
 
 from fastapi import APIRouter, BackgroundTasks, Cookie, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
 from statuspage.database.connection import get_db
@@ -66,6 +66,13 @@ class ServiceOut(BaseModel):
     last_checked_at: datetime.datetime | None
 
     model_config = {"from_attributes": True}
+
+    @field_validator("created_at", "updated_at", "last_checked_at", mode="before")
+    @classmethod
+    def ensure_utc(cls, v: datetime.datetime | None) -> datetime.datetime | None:
+        if isinstance(v, datetime.datetime) and v.tzinfo is None:
+            return v.replace(tzinfo=datetime.timezone.utc)
+        return v
 
 
 @router.get("/services", response_model=list[ServiceOut])
@@ -175,6 +182,13 @@ class IncidentOut(BaseModel):
     updated_at: datetime.datetime
 
     model_config = {"from_attributes": True}
+
+    @field_validator("created_at", "updated_at", mode="before")
+    @classmethod
+    def ensure_utc(cls, v: datetime.datetime | None) -> datetime.datetime | None:
+        if isinstance(v, datetime.datetime) and v.tzinfo is None:
+            return v.replace(tzinfo=datetime.timezone.utc)
+        return v
 
 
 @router.get("/incidents", response_model=list[IncidentOut])
