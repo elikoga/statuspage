@@ -35,45 +35,51 @@ def perform_db_upgrade():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # --- startup ---
     try:
-        await _lifespan_body(app)
+        logger.info("starting up")
+        perform_db_upgrade()
+        logging.basicConfig(
+            force=True,
+            level=logging.INFO,
+            format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        )
+
+        from statuspage.database.connection import create_sqlalchemy_engine
+
+        app.state.db_engine = create_sqlalchemy_engine()
+        import statuspage.main as _self
+
+        from statuspage import auth as _auth
+
+        _auth.init(
+            global_settings.ADMIN_USERNAME,
+            global_settings.ADMIN_PASSWORD,
+            global_settings.DATA_PATH,
+            db_engine=app.state.db_engine,
+        )
+        _self.db_engine = app.state.db_engine
+
+        logger.info("starting frontend")
+        await frontend.frontend.run()
+        logger.info("frontend started at %s", global_settings.BASE_URL)
+
+        from statuspage import checker as _checker
+
+        _checker_task = asyncio.create_task(
+            _checker.health_check_loop(app.state.db_engine, global_settings.CHECK_INTERVAL_SECONDS)
+        )
+        _purge_task = asyncio.create_task(_session_purge_loop())
     except Exception:
         import traceback
+
         traceback.print_exc()
         raise
 
-
-async def _lifespan_body(app: FastAPI):
-    logger.info("starting up")
-    perform_db_upgrade()
-    logging.basicConfig(
-        force=True,
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-    )
-
-    from statuspage.database.connection import create_sqlalchemy_engine
-
-    app.state.db_engine = create_sqlalchemy_engine()
-    import statuspage.main as _self
-
-    from statuspage import auth as _auth
-
-    _auth.init(global_settings.ADMIN_USERNAME, global_settings.ADMIN_PASSWORD, global_settings.DATA_PATH, db_engine=app.state.db_engine)
-    _self.db_engine = app.state.db_engine
-
-    logger.info("starting frontend")
-    await frontend.frontend.run()
-    logger.info("frontend started at %s", global_settings.BASE_URL)
-
-    from statuspage import checker as _checker
-    _checker_task = asyncio.create_task(
-        _checker.health_check_loop(app.state.db_engine, global_settings.CHECK_INTERVAL_SECONDS)
-    )
-    _purge_task = asyncio.create_task(_session_purge_loop())
-
+    # --- hand control back to the server ---
     yield
 
+    # --- shutdown ---
     _purge_task.cancel()
     try:
         await _purge_task
@@ -108,14 +114,13 @@ app.include_router(frontend.router)  # catch-all — must be last
 db_engine = None
 
 
-
-
 async def _session_purge_loop() -> None:
     """Purge expired sessions from the DB once per hour."""
     while True:
         try:
             await asyncio.sleep(3600)
             from statuspage import auth as _auth
+
             count = _auth.purge_expired_sessions()
             if count:
                 logger.info("purged %d expired session(s)", count)
@@ -123,6 +128,8 @@ async def _session_purge_loop() -> None:
             raise
         except Exception:
             logger.exception("error purging expired sessions")
+
+
 def main():
     import uvicorn
 
