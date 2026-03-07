@@ -35,6 +35,15 @@ def perform_db_upgrade():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    try:
+        await _lifespan_body(app)
+    except Exception:
+        import traceback
+        traceback.print_exc()
+        raise
+
+
+async def _lifespan_body(app: FastAPI):
     logger.info("starting up")
     perform_db_upgrade()
     logging.basicConfig(
