@@ -119,14 +119,14 @@ async def notify(subject: str, body: str = "") -> None:
 
 async def notify_status_change(service_name: str, old_status: str, new_status: str) -> None:
     """Called by the health checker when a service's status changes."""
+    from statuspage.config import global_settings as cfg
     if old_status == new_status:
         return
     if new_status == "operational":
         subject = f"[StatusPage] {service_name} recovered ({old_status} -> operational)"
     else:
         subject = f"[StatusPage] {service_name}: {old_status} -> {new_status}"
-    await notify(subject)
-
+    await notify(subject, body=cfg.BASE_URL)
 
 async def notify_incident(action: str, title: str, status: str, body: str) -> None:
     """Called when an incident is created or updated."""

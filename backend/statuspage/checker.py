@@ -17,7 +17,7 @@ async def _check_one(client: httpx.AsyncClient, name: str, url: str) -> str:
             return ServiceStatus.outage
         return ServiceStatus.operational
     except (httpx.ConnectError, httpx.TimeoutException, httpx.TransportError) as exc:
-        _log.debug("check %s -> %s: %s", name, type(exc).__name__, exc)
+        _log.warning("check %s failed: %s: %s", name, type(exc).__name__, exc)
         return ServiceStatus.outage
     except Exception as exc:  # noqa: BLE001
         _log.warning("unexpected error checking %s: %s", name, exc)
@@ -71,6 +71,7 @@ async def run_checks(db_engine) -> None:
             if new_status == ServiceStatus.outage and (on_demand or prior_status == ServiceStatus.offline):
                 new_status = ServiceStatus.offline
             if new_status != prior_status:
+                _log.info("status change: %s %s -> %s", svc_name, prior_status.value, new_status.value)
                 status_changes.append((svc_name, prior_status.value, new_status.value))
             svc.status = new_status
             svc.last_checked_at = now
