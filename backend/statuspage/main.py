@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.gzip import GZipMiddleware
 
 from statuspage.config import global_settings
-from statuspage.routers import api, frontend
+from statuspage.routers import api, auth, frontend
 
 logging.basicConfig(
     level=logging.INFO,
@@ -34,6 +34,9 @@ async def lifespan(app: FastAPI):
     logger.info("starting up")
     perform_db_upgrade()
 
+    from statuspage import auth as _auth
+
+    _auth.init(global_settings.ADMIN_USERNAME, global_settings.ADMIN_PASSWORD)
     # expose the engine on the app state so get_db() can reach it
     from statuspage.database.connection import create_sqlalchemy_engine
 
@@ -62,6 +65,7 @@ app = FastAPI(
 
 app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=5)
 
+app.include_router(auth.router, prefix="/auth")
 app.include_router(api.router, prefix="/api")
 app.include_router(frontend.router)  # catch-all — must be last
 

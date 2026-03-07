@@ -21,15 +21,7 @@
 	<title>Admin — Status Page</title>
 </svelte:head>
 
-<div class="min-h-screen bg-gray-50">
-	<header class="bg-white shadow-sm">
-		<div class="mx-auto max-w-4xl px-4 py-5 flex items-center justify-between">
-			<h1 class="text-xl font-bold text-gray-900">Admin</h1>
-			<a href="/" class="text-sm text-blue-600 hover:underline">View public page</a>
-		</div>
-	</header>
-
-	<main class="mx-auto max-w-4xl px-4 py-8 space-y-12">
+<main class="mx-auto max-w-4xl px-4 py-8 space-y-12">
 		<!-- ── Services ────────────────────────────────────────────── -->
 		<section>
 			<h2 class="text-lg font-semibold text-gray-800 mb-4">Services</h2>
@@ -276,6 +268,5 @@
 					{/each}
 				</div>
 			{/if}
-		</section>
-	</main>
-</div>
+	</section>
+</main>

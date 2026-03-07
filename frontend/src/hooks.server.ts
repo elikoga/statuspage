@@ -17,12 +17,24 @@ if (
 	privateBaseUrl = new URL(DEFAULT_BASE_URL);
 }
 
+const SESSION_COOKIE = 'session-token';
+
 export const handleFetch: HandleFetch = async ({ request, fetch, event }) => {
 	const parsed = new URL(request.url);
 	if (
 		event.url.host === parsed.host &&
-		parsed.pathname.startsWith('/api')
+		(parsed.pathname.startsWith('/api') || parsed.pathname.startsWith('/auth'))
 	) {
+		// Forward the session cookie so the backend can authenticate SSR requests.
+		const token = event.cookies.get(SESSION_COOKIE);
+		if (token) {
+			const existing = request.headers.get('cookie') ?? '';
+			request.headers.set(
+				'cookie',
+				existing ? `${existing}; ${SESSION_COOKIE}=${token}` : `${SESSION_COOKIE}=${token}`
+			);
+		}
+
 		const rewritten = new URL(request.url);
 		rewritten.host = privateBaseUrl.host;
 		rewritten.protocol = privateBaseUrl.protocol;

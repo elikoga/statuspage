@@ -8,6 +8,8 @@ class GlobalSettings(BaseSettings):
     DATA_PATH: pathlib.Path = pathlib.Path("./data")
     FRONTEND_BINARY_PATH: str | None = None
     ALEMBIC_INI_PATH: str = "alembic.ini"
+    ADMIN_USERNAME: str = "admin"
+    ADMIN_PASSWORD: str | None = None
 
     model_config = SettingsConfigDict(env_prefix="STATUSPAGE_", env_file=".env")
 
