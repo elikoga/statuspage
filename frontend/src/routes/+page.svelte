@@ -141,7 +141,16 @@
 								{#each groupServices as service (service.id)}
 									<div class="flex items-center justify-between px-4 py-3">
 										<div>
-											<span class="font-medium text-gray-900">{service.name}</span>
+									{#if (service as {site_url?: string | null}).site_url || ((service as {url?: string | null}).url ?? '').startsWith('https://')}
+										<a
+											href={(service as {site_url?: string | null}).site_url ?? (service as {url?: string | null}).url}
+											target="_blank"
+											rel="noopener noreferrer"
+											class="font-medium text-gray-900 hover:underline"
+										>{service.name}</a>
+									{:else}
+										<span class="font-medium text-gray-900">{service.name}</span>
+									{/if}
 											{#if service.description}
 												<p class="text-xs text-gray-500 mt-0.5">{service.description}</p>
 											{/if}

@@ -30,6 +30,7 @@ class ServiceCreate(BaseModel):
     name: str
     description: str | None = None
     url: str | None = None
+    site_url: str | None = None
     status: ServiceStatus = ServiceStatus.operational
     group: str | None = None
     check_enabled: bool = True
@@ -41,6 +42,7 @@ class ServiceUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
     url: str | None = None
+    site_url: str | None = None
     status: ServiceStatus | None = None
     group: str | None = None
     check_enabled: bool | None = None
@@ -53,6 +55,7 @@ class ServiceOut(BaseModel):
     name: str
     description: str | None
     url: str | None
+    site_url: str | None
     status: ServiceStatus
     created_at: datetime.datetime
     updated_at: datetime.datetime
@@ -85,6 +88,7 @@ def create_service(body: ServiceCreate, db: Session = Depends(get_db), _user: st
         name=body.name,
         description=body.description,
         url=body.url,
+        site_url=body.site_url,
         status=body.status,
         group=body.group,
         check_enabled=body.check_enabled,
@@ -120,6 +124,8 @@ def update_service(
         service.description = body.description
     if body.url is not None:
         service.url = body.url
+    if "site_url" in body.model_fields_set:
+        service.site_url = body.site_url
     if body.status is not None:
         service.status = body.status
     if "group" in body.model_fields_set:

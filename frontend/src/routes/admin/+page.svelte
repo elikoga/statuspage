@@ -59,6 +59,11 @@
 					class="border border-gray-300 rounded px-3 py-2 text-sm sm:col-span-2"
 				/>
 				<input
+					name="site_url"
+					placeholder="Site URL (optional, shown as link)"
+					class="border border-gray-300 rounded px-3 py-2 text-sm sm:col-span-2"
+				/>
+				<input
 					name="group"
 					placeholder="Group (e.g. Personal)"
 					class="border border-gray-300 rounded px-3 py-2 text-sm"
@@ -123,6 +128,12 @@
 									placeholder="URL"
 									class="border border-gray-300 rounded px-3 py-1.5 text-sm sm:col-span-2"
 								/>
+							<input
+								name="site_url"
+								value={(editingService as {site_url?: string | null}).site_url ?? ''}
+								placeholder="Site URL"
+								class="border border-gray-300 rounded px-3 py-1.5 text-sm sm:col-span-2"
+							/>
 								<input
 									name="group"
 									value={(editingService as {group?: string | null}).group ?? ''}
@@ -167,6 +178,9 @@
 									{#if (service as {group?: string | null}).group}
 										<p class="text-xs text-gray-400 mt-0.5">Group: {(service as {group?: string | null}).group}</p>
 									{/if}
+							{#if (service as {site_url?: string | null}).site_url}
+								<p class="text-xs text-gray-400 mt-0.5">Site: {(service as {site_url?: string | null}).site_url}</p>
+							{/if}
 									{#if (service as {last_checked_at?: string | null}).last_checked_at}
 										<p class="text-xs text-gray-400">Last checked: {new Date((service as {last_checked_at?: string | null}).last_checked_at!).toLocaleTimeString()}</p>
 									{/if}

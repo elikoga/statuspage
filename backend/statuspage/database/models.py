@@ -31,6 +31,7 @@ class Service(Base):
     name = Column(String, nullable=False)
     description = Column(Text, nullable=True)
     url = Column(String, nullable=True)
+    site_url = Column(String, nullable=True)
     status = Column(
         Enum(ServiceStatus), default=ServiceStatus.operational, nullable=False
     )
