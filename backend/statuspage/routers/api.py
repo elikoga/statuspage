@@ -6,7 +6,7 @@ from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
 from statuspage.database.connection import get_db
-from statuspage.database.models import CheckType, Incident, IncidentStatus, Service, ServiceStatus
+from statuspage.database.models import CheckType, Incident, IncidentStatus, Service, ServiceStatus, ServiceStatusHistory
 from statuspage import auth as _auth
 
 router = APIRouter(tags=["api"])
@@ -113,6 +113,8 @@ def create_service(body: ServiceCreate, db: Session = Depends(get_db), _user: st
         updated_at=datetime.datetime.utcnow(),
     )
     db.add(service)
+    now = datetime.datetime.utcnow()
+    db.add(ServiceStatusHistory(service_id=service.id, status=service.status, started_at=now))
     db.commit()
     db.refresh(service)
     return service
@@ -170,6 +172,75 @@ def delete_service(service_id: str, db: Session = Depends(get_db), _user: str = 
     db.commit()
 
 
+
+
+# ── History ──────────────────────────────────────────────────────────────────
+
+
+def _compute_daily_history(
+    rows: list, days: int, now: datetime.datetime
+) -> list[dict]:
+    """Return one {date, status} entry per day for the last `days` days.
+
+    For each day: worst status of all events that started that day, carry-forward
+    the last known status when no event occurred, 'no_data' if no history at all.
+    """
+    _PRIORITY = {"outage": 3, "degraded": 2, "operational": 1, "offline": 0}
+    today = now.date()
+    rows_sorted = sorted(rows, key=lambda r: r.started_at)
+    result = []
+    for i in range(days - 1, -1, -1):
+        day = today - datetime.timedelta(days=i)
+        day_start = datetime.datetime(day.year, day.month, day.day)
+        day_end = day_start + datetime.timedelta(days=1)
+        in_day = [r for r in rows_sorted if day_start <= r.started_at < day_end]
+        before_day = [r for r in rows_sorted if r.started_at < day_start]
+        if not in_day and not before_day:
+            status = "no_data"
+        elif not in_day:
+            status = before_day[-1].status.value
+        else:
+            candidates = in_day + (before_day[-1:] if before_day else [])
+            status = max(candidates, key=lambda r: _PRIORITY.get(r.status.value, -1)).status.value
+        result.append({"date": day.isoformat(), "status": status})
+    return result
+
+
+@router.get("/history")
+def get_history(
+    days: int = Query(default=90, ge=1, le=365),
+    db: Session = Depends(get_db),
+    session_token: str | None = Cookie(default=None, alias="session-token"),
+    include_private: bool = Query(default=False),
+) -> dict[str, list[dict]]:
+    if include_private:
+        if not session_token or not _auth.get_session(session_token):
+            raise HTTPException(status_code=401, detail="Not authenticated")
+        service_ids = [r[0] for r in db.query(Service.id).all()]
+    else:
+        service_ids = [r[0] for r in db.query(Service.id).filter(Service.is_public.is_(True)).all()]
+
+    if not service_ids:
+        return {}
+
+    now = datetime.datetime.utcnow()
+    window_start = now - datetime.timedelta(days=days + 1)  # +1 for carry-over
+    rows = (
+        db.query(ServiceStatusHistory)
+        .filter(
+            ServiceStatusHistory.service_id.in_(service_ids),
+            ServiceStatusHistory.started_at >= window_start,
+        )
+        .order_by(ServiceStatusHistory.service_id, ServiceStatusHistory.started_at)
+        .all()
+    )
+
+    from collections import defaultdict
+    rows_by_service: dict[str, list] = defaultdict(list)
+    for row in rows:
+        rows_by_service[row.service_id].append(row)
+
+    return {svc_id: _compute_daily_history(rows_by_service[svc_id], days, now) for svc_id in service_ids}
 # ── Incidents ─────────────────────────────────────────────────────────────────
 
 

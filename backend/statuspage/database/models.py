@@ -2,7 +2,7 @@ import datetime
 import enum
 import uuid
 
-from sqlalchemy import Boolean, Column, DateTime, Enum, String, Text
+from sqlalchemy import Boolean, Column, DateTime, Enum, Index, String, Text
 from sqlalchemy.orm import DeclarativeBase
 
 
@@ -84,3 +84,16 @@ class SessionStore(Base):
     token = Column(String, primary_key=True)
     username = Column(String, nullable=False)
     expires_at = Column(DateTime, nullable=False)
+
+
+class ServiceStatusHistory(Base):
+    __tablename__ = "service_status_history"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    service_id = Column(String, nullable=False)
+    status = Column(Enum(ServiceStatus), nullable=False)
+    started_at = Column(DateTime, nullable=False)
+
+    __table_args__ = (
+        Index("ix_ssh_service_started", "service_id", "started_at"),
+    )

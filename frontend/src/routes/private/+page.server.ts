@@ -7,13 +7,15 @@ export const load: PageServerLoad = async ({ fetch, url }) => {
 		throw redirect(303, `/login?next=${encodeURIComponent(url.pathname)}`);
 	}
 
-	const [servicesRes, incidentsRes] = await Promise.all([
+	const [servicesRes, incidentsRes, historyRes] = await Promise.all([
 		fetch('/api/services?include_private=true'),
-		fetch('/api/incidents')
+		fetch('/api/incidents'),
+		fetch('/api/history?days=90&include_private=true')
 	]);
 
 	return {
 		services: await servicesRes.json(),
-		incidents: await incidentsRes.json()
+		incidents: await incidentsRes.json(),
+		history: await historyRes.json()
 	};
 };

@@ -153,6 +153,7 @@ async def run_checks(db_engine) -> None:
     # Phase 3: write results; acquire connection only now.
     now = datetime.datetime.utcnow()
     status_changes: list[tuple[str, str, str]] = []
+    history_inserts: list = []
     with Session(db_engine) as session:
         for (svc_id, svc_name, _, prior_status, on_demand, _ct, _cmd), result in zip(targets, results):
             svc = session.get(Service, svc_id)
@@ -170,8 +171,16 @@ async def run_checks(db_engine) -> None:
             if new_status != prior_status:
                 _log.info("status change: %s %s -> %s", svc_name, prior_status.value, new_status.value)
                 status_changes.append((svc_name, prior_status.value, new_status.value))
+                from statuspage.database.models import ServiceStatusHistory
+                history_inserts.append(ServiceStatusHistory(
+                    service_id=svc_id,
+                    status=new_status,
+                    started_at=now,
+                ))
             svc.status = new_status
             svc.last_checked_at = now
+        for h in history_inserts:
+            session.add(h)
         session.commit()
     _log.info("checked %d services", len(targets))
 
