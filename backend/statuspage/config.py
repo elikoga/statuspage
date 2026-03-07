@@ -14,7 +14,7 @@ class GlobalSettings(BaseSettings):
     OIDC_CLIENT_ID: str | None = None
     OIDC_CLIENT_SECRET: str | None = None
     OIDC_PROVIDER_NAME: str = "Keycloak"
-    CHECK_INTERVAL_SECONDS: int = 60
+    CHECK_INTERVAL_SECONDS: int = 30
 
     # ── Telegram notifications ────────────────────────────────────────────────
     TELEGRAM_BOT_TOKEN: str | None = None
