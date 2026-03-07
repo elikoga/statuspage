@@ -7,7 +7,8 @@ from sqlalchemy import or_, and_
 
 _log = logging.getLogger(__name__)
 
-_COMMAND_TIMEOUT = 45.0  # seconds; relay SSH needs auth + relay setup time
+_COMMAND_TIMEOUT = 45.0   # seconds; relay SSH needs auth + relay setup time
+_WARMUP_TIMEOUT  = 300.0  # seconds; one-time init (nix store population, etc.)
 
 
 async def _check_http(client: httpx.AsyncClient, name: str, url: str) -> str:
@@ -53,6 +54,51 @@ async def _check_command(name: str, command: str) -> str:
     except Exception as exc:  # noqa: BLE001
         _log.warning("check %s: command error: %s", name, exc)
         return ServiceStatus.outage
+
+
+async def _warmup_single(name: str, command: str) -> None:
+    """Run command once with a long timeout; result is discarded."""
+    try:
+        proc = await asyncio.create_subprocess_shell(
+            command,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        try:
+            await asyncio.wait_for(proc.wait(), timeout=_WARMUP_TIMEOUT)
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.wait()
+            _log.warning("warmup %s: timed out after %.0fs", name, _WARMUP_TIMEOUT)
+    except Exception as exc:  # noqa: BLE001
+        _log.warning("warmup %s: error: %s", name, exc)
+
+
+async def warmup_command_checks(db_engine) -> None:
+    """Run all command-type checks once at startup to warm caches.
+
+    Results are discarded; the sole purpose is side-effects such as populating
+    the nix store so subsequent timed checks don't incur download latency.
+    """
+    from sqlalchemy.orm import Session
+    from statuspage.database.models import CheckType, Service
+
+    with Session(db_engine) as session:
+        rows = (
+            session.query(Service.name, Service.check_command)
+            .filter(
+                Service.check_enabled.is_(True),
+                Service.check_type == CheckType.command,
+                Service.check_command.isnot(None),
+            )
+            .all()
+        )
+    if not rows:
+        return
+
+    _log.info("warming up %d command check(s)", len(rows))
+    await asyncio.gather(*[_warmup_single(row.name, row.check_command) for row in rows])
+    _log.info("command check warmup complete")
 
 
 async def run_checks(db_engine) -> None:

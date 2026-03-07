@@ -66,6 +66,10 @@ async def lifespan(app: FastAPI):
 
         from statuspage import checker as _checker
 
+        asyncio.create_task(
+            _checker.warmup_command_checks(app.state.db_engine),
+            name="warmup-command-checks",
+        )
         _checker_task = asyncio.create_task(
             _checker.health_check_loop(app.state.db_engine, global_settings.CHECK_INTERVAL_SECONDS)
         )
