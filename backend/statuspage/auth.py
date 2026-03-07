@@ -52,3 +52,34 @@ def get_session(token: str) -> dict[str, Any] | None:
 
 def delete_session(token: str) -> None:
     _sessions.pop(token, None)
+
+
+
+# ---------------------------------------------------------------------------
+# OIDC state store (short-lived; state token -> payload)
+# ---------------------------------------------------------------------------
+
+_OIDC_STATE_TTL = datetime.timedelta(minutes=10)
+_oidc_states: dict[str, dict] = {}
+
+
+def create_oidc_state(next_url: str) -> tuple[str, str]:
+    """Return (state, nonce) and persist them for the duration of the OAuth flow."""
+    state = secrets.token_urlsafe(32)
+    nonce = secrets.token_urlsafe(32)
+    _oidc_states[state] = {
+        "nonce": nonce,
+        "next": next_url,
+        "expires_at": datetime.datetime.utcnow() + _OIDC_STATE_TTL,
+    }
+    return state, nonce
+
+
+def consume_oidc_state(state: str) -> dict | None:
+    """Pop and return the state payload, or None if missing/expired."""
+    entry = _oidc_states.pop(state, None)
+    if entry is None:
+        return None
+    if datetime.datetime.utcnow() > entry["expires_at"]:
+        return None
+    return entry

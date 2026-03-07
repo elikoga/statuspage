@@ -8,7 +8,16 @@ export const load: PageServerLoad = async ({ fetch, url }) => {
 		const next = url.searchParams.get('next') ?? '/admin';
 		throw redirect(303, next);
 	}
-	return { next: url.searchParams.get('next') ?? '/admin' };
+
+	const configRes = await fetch('/auth/config');
+	const authConfig = configRes.ok ? await configRes.json() : {};
+
+	return {
+		next: url.searchParams.get('next') ?? '/admin',
+		error: url.searchParams.get('error') ?? null,
+		oidcEnabled: authConfig.oidc_enabled ?? false,
+		oidcProviderName: authConfig.oidc_provider_name ?? 'Keycloak'
+	};
 };
 
 export const actions: Actions = {

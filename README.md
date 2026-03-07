@@ -52,9 +52,55 @@ frontend/
 | `STATUSPAGE_FRONTEND_BINARY_PATH` | *(none)* | Path to a prebuilt frontend binary |
 | `UVICORN_HOST` | `127.0.0.1` | Host uvicorn listens on |
 | `UVICORN_PORT` | `8000` | Port uvicorn listens on |
+| `STATUSPAGE_ADMIN_USERNAME` | `admin` | Admin username |
+| `STATUSPAGE_ADMIN_PASSWORD` | *(auto-generated)* | Admin password; logged at WARNING if unset |
+| `STATUSPAGE_OIDC_ISSUER_URL` | *(none)* | Enables OIDC when set (e.g. Keycloak realm URL) |
+| `STATUSPAGE_OIDC_CLIENT_ID` | *(none)* | OIDC client ID |
+| `STATUSPAGE_OIDC_CLIENT_SECRET` | *(none)* | OIDC client secret |
+| `STATUSPAGE_OIDC_PROVIDER_NAME` | `Keycloak` | Label shown on the SSO button |
 
 The frontend receives `PRIVATE_BASE_URL` (derived from `UVICORN_HOST`/`UVICORN_PORT`) for SSR → backend calls, and `PUBLIC_BASE_URL` for client-side use.
 
+
+## Authentication
+
+### Password (default)
+
+A single admin account is used. Set credentials via env vars:
+
+```
+STATUSPAGE_ADMIN_USERNAME=admin          # default: admin
+STATUSPAGE_ADMIN_PASSWORD=changeme       # if unset, a random password is
+                                         # generated and logged at WARNING level
+```
+
+The login form is at `/login`.
+
+### OIDC / Keycloak
+
+Set these four vars to enable SSO. The password form is still available as a
+fallback behind a `<details>` toggle.
+
+```
+STATUSPAGE_OIDC_ISSUER_URL=https://keycloak.example.com/realms/myrealm
+STATUSPAGE_OIDC_CLIENT_ID=statuspage
+STATUSPAGE_OIDC_CLIENT_SECRET=<secret>
+STATUSPAGE_OIDC_PROVIDER_NAME=Keycloak   # optional — changes the button label
+```
+
+**Keycloak client settings**:
+- Access type: **Confidential**
+- Valid redirect URI: `{BASE_URL}/auth/oidc/callback`
+  (e.g. `https://status.example.com/auth/oidc/callback`)
+
+**How it works**: `GET /auth/oidc/login` redirects to Keycloak. After the user
+authenticates, Keycloak redirects back to `GET /auth/oidc/callback`. The backend
+exchanges the code for an access token, fetches `/userinfo`, and creates a
+session — no JWT validation needed on our side (confidential client flow).
+Because the callback is a direct browser redirect (not a proxied SSR fetch),
+the backend can set the session cookie directly in the response.
+
+Username is taken from `preferred_username`, falling back to `email`, then `sub`.
 ## Database migrations
 
 ```bash
