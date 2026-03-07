@@ -21,6 +21,10 @@ logger = logging.getLogger(__name__)
 
 def perform_db_upgrade():
     alembic_cfg = Config(global_settings.ALEMBIC_INI_PATH)
+    alembic_cfg.set_main_option(
+        "script_location",
+        os.path.join(os.path.dirname(os.path.abspath(global_settings.ALEMBIC_INI_PATH)), "alembic"),
+    )
     from statuspage.database.connection import get_db_url
 
     alembic_cfg.set_main_option("sqlalchemy.url", get_db_url())
