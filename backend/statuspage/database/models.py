@@ -17,6 +17,10 @@ class ServiceStatus(str, enum.Enum):
     offline = "offline"
 
 
+class CheckType(str, enum.Enum):
+    http = "http"
+    command = "command"
+
 class IncidentStatus(str, enum.Enum):
     investigating = "investigating"
     identified = "identified"
@@ -47,6 +51,10 @@ class Service(Base):
     last_checked_at = Column(DateTime, nullable=True)
     is_public = Column(Boolean, default=True, nullable=False)
     on_demand = Column(Boolean, default=False, nullable=False)
+    check_type = Column(
+        Enum(CheckType), default=CheckType.http, nullable=False
+    )
+    check_command = Column(Text, nullable=True)
 
 
 class Incident(Base):

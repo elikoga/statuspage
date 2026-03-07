@@ -6,7 +6,7 @@ from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
 from statuspage.database.connection import get_db
-from statuspage.database.models import Incident, IncidentStatus, Service, ServiceStatus
+from statuspage.database.models import CheckType, Incident, IncidentStatus, Service, ServiceStatus
 from statuspage import auth as _auth
 
 router = APIRouter(tags=["api"])
@@ -36,6 +36,8 @@ class ServiceCreate(BaseModel):
     check_enabled: bool = True
     is_public: bool = True
     on_demand: bool = False
+    check_type: CheckType = CheckType.http
+    check_command: str | None = None
 
 
 class ServiceUpdate(BaseModel):
@@ -48,6 +50,8 @@ class ServiceUpdate(BaseModel):
     check_enabled: bool | None = None
     is_public: bool | None = None
     on_demand: bool | None = None
+    check_type: CheckType | None = None
+    check_command: str | None = None
 
 
 class ServiceOut(BaseModel):
@@ -64,6 +68,8 @@ class ServiceOut(BaseModel):
     is_public: bool
     on_demand: bool
     last_checked_at: datetime.datetime | None
+    check_type: CheckType
+    check_command: str | None
 
     model_config = {"from_attributes": True}
 
@@ -101,6 +107,8 @@ def create_service(body: ServiceCreate, db: Session = Depends(get_db), _user: st
         check_enabled=body.check_enabled,
         is_public=body.is_public,
         on_demand=body.on_demand,
+        check_type=body.check_type,
+        check_command=body.check_command,
         created_at=datetime.datetime.utcnow(),
         updated_at=datetime.datetime.utcnow(),
     )
@@ -143,6 +151,10 @@ def update_service(
         service.is_public = body.is_public
     if body.on_demand is not None:
         service.on_demand = body.on_demand
+    if body.check_type is not None:
+        service.check_type = body.check_type
+    if "check_command" in body.model_fields_set:
+        service.check_command = body.check_command
     service.updated_at = datetime.datetime.utcnow()
     db.commit()
     db.refresh(service)

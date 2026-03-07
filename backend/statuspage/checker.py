@@ -3,12 +3,15 @@ import datetime
 import logging
 
 import httpx
+from sqlalchemy import or_, and_
 
 _log = logging.getLogger(__name__)
 
+_COMMAND_TIMEOUT = 45.0  # seconds; relay SSH needs auth + relay setup time
 
-async def _check_one(client: httpx.AsyncClient, name: str, url: str) -> str:
-    """Returns the new ServiceStatus string for one service."""
+
+async def _check_http(client: httpx.AsyncClient, name: str, url: str) -> str:
+    """HTTP GET — operational if status < 500, outage otherwise."""
     from statuspage.database.models import ServiceStatus
 
     try:
@@ -24,32 +27,80 @@ async def _check_one(client: httpx.AsyncClient, name: str, url: str) -> str:
         return ServiceStatus.outage
 
 
+async def _check_command(name: str, command: str) -> str:
+    """Shell command — operational if exit 0, outage otherwise."""
+    from statuspage.database.models import ServiceStatus
+
+    try:
+        proc = await asyncio.create_subprocess_shell(
+            command,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            _, stderr = await asyncio.wait_for(proc.communicate(), timeout=_COMMAND_TIMEOUT)
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.communicate()
+            _log.warning("check %s: command timed out after %.0fs", name, _COMMAND_TIMEOUT)
+            return ServiceStatus.outage
+
+        if proc.returncode == 0:
+            return ServiceStatus.operational
+        stderr_text = (stderr or b"").decode(errors="replace").strip()
+        _log.warning("check %s: command exited %d: %s", name, proc.returncode, stderr_text)
+        return ServiceStatus.outage
+    except Exception as exc:  # noqa: BLE001
+        _log.warning("check %s: command error: %s", name, exc)
+        return ServiceStatus.outage
+
+
 async def run_checks(db_engine) -> None:
     """Run one round of health checks; updates DB in-place."""
     from sqlalchemy.orm import Session
-    from statuspage.database.models import Service, ServiceStatus
+    from statuspage.database.models import CheckType, Service, ServiceStatus
 
     # Phase 1: read service list, then release the connection immediately.
     with Session(db_engine) as session:
         rows = (
-            session.query(Service.id, Service.name, Service.url, Service.status, Service.on_demand)
+            session.query(
+                Service.id,
+                Service.name,
+                Service.url,
+                Service.status,
+                Service.on_demand,
+                Service.check_type,
+                Service.check_command,
+            )
             .filter(
-                Service.url.isnot(None),
                 Service.check_enabled.is_(True),
+                or_(
+                    and_(Service.check_type == CheckType.http, Service.url.isnot(None)),
+                    and_(Service.check_type == CheckType.command, Service.check_command.isnot(None)),
+                ),
             )
             .all()
         )
     if not rows:
         return
 
-    # Phase 2: run all HTTP checks with no DB connection held.
-    targets = [(row.id, row.name, row.url, row.status, row.on_demand) for row in rows]
+    targets = [
+        (row.id, row.name, row.url, row.status, row.on_demand, row.check_type, row.check_command)
+        for row in rows
+    ]
+
+    # Phase 2: run all checks with no DB connection held.
     async with httpx.AsyncClient(
         timeout=httpx.Timeout(10.0),
         follow_redirects=True,
     ) as client:
+        async def _dispatch(name: str, url: str | None, check_type: str, cmd: str | None) -> str:
+            if check_type == CheckType.command:
+                return await _check_command(name, cmd)
+            return await _check_http(client, name, url)
+
         results = await asyncio.gather(
-            *[_check_one(client, name, url) for _, name, url, _, _ in targets],
+            *[_dispatch(name, url, ct, cmd) for _, name, url, _, _, ct, cmd in targets],
             return_exceptions=True,
         )
 
@@ -57,7 +108,7 @@ async def run_checks(db_engine) -> None:
     now = datetime.datetime.utcnow()
     status_changes: list[tuple[str, str, str]] = []
     with Session(db_engine) as session:
-        for (svc_id, svc_name, _, prior_status, on_demand), result in zip(targets, results):
+        for (svc_id, svc_name, _, prior_status, on_demand, _ct, _cmd), result in zip(targets, results):
             svc = session.get(Service, svc_id)
             if svc is None:
                 continue
