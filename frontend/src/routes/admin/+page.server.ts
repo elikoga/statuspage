@@ -27,7 +27,9 @@ export const actions: Actions = {
 				status: data.get('status') || 'operational',
 				is_public: data.get('is_public') === 'true',
 				check_enabled: data.get('check_enabled') === 'true',
-				on_demand: data.get('on_demand') === 'true'
+				on_demand: data.get('on_demand') === 'true',
+				check_type: data.get('check_type') || 'http',
+				check_command: data.get('check_command') || null
 			})
 		});
 		if (!res.ok) return fail(res.status, { error: await res.text() });
@@ -48,7 +50,9 @@ export const actions: Actions = {
 				status: data.get('status') || undefined,
 				is_public: data.get('is_public') === 'true',
 				check_enabled: data.get('check_enabled') === 'true',
-				on_demand: data.get('on_demand') === 'true'
+				on_demand: data.get('on_demand') === 'true',
+				check_type: data.get('check_type') || undefined,
+				check_command: data.get('check_command') || null
 			})
 		});
 		if (!res.ok) return fail(res.status, { error: await res.text() });

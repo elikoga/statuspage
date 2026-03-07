@@ -16,6 +16,7 @@
 
 	let editingService: (typeof data.services)[number] | null = $state(null);
 	let editingIncident: (typeof data.incidents)[number] | null = $state(null);
+	let newCheckType: string = $state('http');
 </script>
 
 <svelte:head>
@@ -82,6 +83,22 @@
 						On-demand
 					</label>
 				</div>
+			<select
+				name="check_type"
+				bind:value={newCheckType}
+				class="border border-gray-300 rounded px-3 py-2 text-sm"
+			>
+				<option value="http">HTTP</option>
+				<option value="command">Command</option>
+			</select>
+			{#if newCheckType === 'command'}
+				<textarea
+					name="check_command"
+					placeholder="Shell command (exit 0 = up)"
+					rows="3"
+					class="border border-gray-300 rounded px-3 py-2 text-sm sm:col-span-4 font-mono resize-y"
+				></textarea>
+			{/if}
 				<button
 					type="submit"
 					class="bg-blue-600 hover:bg-blue-700 text-white rounded px-4 py-2 text-sm font-medium"
@@ -154,6 +171,21 @@
 										On-demand
 									</label>
 								</div>
+								<select
+									name="check_type"
+									bind:value={editingService.check_type}
+									class="border border-gray-300 rounded px-3 py-1.5 text-sm"
+								>
+									<option value="http">HTTP</option>
+									<option value="command">Command</option>
+								</select>
+								{#if editingService.check_type === 'command'}
+									<textarea
+										name="check_command"
+										rows="3"
+										class="border border-gray-300 rounded px-3 py-1.5 text-sm sm:col-span-4 font-mono resize-y"
+									>{editingService.check_command ?? ''}</textarea>
+								{/if}
 									<div class="flex gap-2">
 										<button
 											type="submit"
@@ -202,6 +234,9 @@
 							{#if (service as {on_demand?: boolean}).on_demand}
 								<span class="inline-block text-xs px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 mt-0.5">On-demand</span>
 							{/if}
+						{#if (service as {check_type?: string}).check_type === 'command'}
+							<span class="inline-block text-xs px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 mt-0.5">Command check</span>
+						{/if}
 								</div>
 									<div class="flex items-center gap-3">
 										<span class="text-sm {STATUS_COLOR[service.status]}">{service.status}</span>
