@@ -6,13 +6,15 @@
 	const STATUS_LABEL: Record<string, string> = {
 		operational: 'Operational',
 		degraded: 'Degraded',
-		outage: 'Outage'
+		outage: 'Outage',
+		offline: 'Offline'
 	};
 
 	const STATUS_COLOR: Record<string, string> = {
 		operational: 'bg-green-500',
 		degraded: 'bg-yellow-500',
-		outage: 'bg-red-500'
+		outage: 'bg-red-500',
+		offline: 'bg-gray-400'
 	};
 
 	const INCIDENT_STATUS_LABEL: Record<string, string> = {
@@ -42,8 +44,9 @@
 	);
 
 	const overallStatus = $derived(() => {
-		if (data.services.some((s: { status: string }) => s.status === 'outage')) return 'outage';
-		if (data.services.some((s: { status: string }) => s.status === 'degraded')) return 'degraded';
+		const active = data.services.filter((s: { status: string }) => s.status !== 'offline');
+		if (active.some((s: { status: string }) => s.status === 'outage')) return 'outage';
+		if (active.some((s: { status: string }) => s.status === 'degraded')) return 'degraded';
 		return 'operational';
 	});
 

@@ -33,7 +33,11 @@ async def run_checks(db_engine) -> None:
     with Session(db_engine) as session:
         rows = (
             session.query(Service.id, Service.name, Service.url)
-            .filter(Service.url.isnot(None), Service.check_enabled.is_(True))
+            .filter(
+                Service.url.isnot(None),
+                Service.check_enabled.is_(True),
+                Service.status != ServiceStatus.offline,
+            )
             .all()
         )
     if not rows:

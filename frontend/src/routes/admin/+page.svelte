@@ -4,13 +4,14 @@
 
 	let { data }: { data: PageData } = $props();
 
-	const SERVICE_STATUSES = ['operational', 'degraded', 'outage'] as const;
+	const SERVICE_STATUSES = ['operational', 'degraded', 'outage', 'offline'] as const;
 	const INCIDENT_STATUSES = ['investigating', 'identified', 'monitoring', 'resolved'] as const;
 
 	const STATUS_COLOR: Record<string, string> = {
 		operational: 'text-green-600',
 		degraded: 'text-yellow-600',
-		outage: 'text-red-600'
+		outage: 'text-red-600',
+		offline: 'text-gray-500'
 	};
 
 	let editingService: (typeof data.services)[number] | null = $state(null);

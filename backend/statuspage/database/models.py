@@ -14,6 +14,7 @@ class ServiceStatus(str, enum.Enum):
     operational = "operational"
     degraded = "degraded"
     outage = "outage"
+    offline = "offline"
 
 
 class IncidentStatus(str, enum.Enum):
