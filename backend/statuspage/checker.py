@@ -55,6 +55,7 @@ async def run_checks(db_engine) -> None:
 
     # Phase 3: write results; acquire connection only now.
     now = datetime.datetime.utcnow()
+    status_changes: list[tuple[str, str, str]] = []
     with Session(db_engine) as session:
         for (svc_id, svc_name, _, prior_status, on_demand), result in zip(targets, results):
             svc = session.get(Service, svc_id)
@@ -69,10 +70,18 @@ async def run_checks(db_engine) -> None:
             # Non-on_demand services also keep offline if already set manually.
             if new_status == ServiceStatus.outage and (on_demand or prior_status == ServiceStatus.offline):
                 new_status = ServiceStatus.offline
+            if new_status != prior_status:
+                status_changes.append((svc_name, prior_status.value, new_status.value))
             svc.status = new_status
             svc.last_checked_at = now
         session.commit()
     _log.info("checked %d services", len(targets))
+
+    # Fire notifications after the commit so DB is consistent if they fail.
+    if status_changes:
+        from statuspage import notifier as _notifier
+        for svc_name, old_st, new_st in status_changes:
+            asyncio.create_task(_notifier.notify_status_change(svc_name, old_st, new_st))
 
 
 async def health_check_loop(db_engine, interval_seconds: int) -> None:

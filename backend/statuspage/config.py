@@ -16,6 +16,19 @@ class GlobalSettings(BaseSettings):
     OIDC_PROVIDER_NAME: str = "Keycloak"
     CHECK_INTERVAL_SECONDS: int = 60
 
+    # ── Telegram notifications ────────────────────────────────────────────────
+    TELEGRAM_BOT_TOKEN: str | None = None
+    TELEGRAM_CHAT_ID: str | None = None
+
+    # ── Email (SMTP) notifications ───────────────────────────────────────────
+    SMTP_HOST: str | None = None
+    SMTP_PORT: int = 587
+    SMTP_USER: str | None = None
+    SMTP_PASSWORD: str | None = None
+    SMTP_FROM: str | None = None   # defaults to SMTP_USER if unset
+    SMTP_TO: str | None = None     # recipient; enables email when set
+    SMTP_USE_STARTTLS: bool = True  # set False for port-465 SSL or plain relay
+
     model_config = SettingsConfigDict(env_prefix="STATUSPAGE_", env_file=".env")
 
 

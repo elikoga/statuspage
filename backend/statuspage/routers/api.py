@@ -1,7 +1,7 @@
 import datetime
 import uuid
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Cookie, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -183,7 +183,12 @@ def list_incidents(db: Session = Depends(get_db)):
 
 
 @router.post("/incidents", response_model=IncidentOut, status_code=201)
-def create_incident(body: IncidentCreate, db: Session = Depends(get_db), _user: str = Depends(require_auth)):
+def create_incident(
+    body: IncidentCreate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    _user: str = Depends(require_auth),
+):
     incident = Incident(
         id=str(uuid.uuid4()),
         title=body.title,
@@ -195,6 +200,10 @@ def create_incident(body: IncidentCreate, db: Session = Depends(get_db), _user: 
     db.add(incident)
     db.commit()
     db.refresh(incident)
+    from statuspage import notifier as _notifier
+    background_tasks.add_task(
+        _notifier.notify_incident, "created", incident.title, incident.status.value, incident.body
+    )
     return incident
 
 
@@ -208,7 +217,11 @@ def get_incident(incident_id: str, db: Session = Depends(get_db)):
 
 @router.patch("/incidents/{incident_id}", response_model=IncidentOut)
 def update_incident(
-    incident_id: str, body: IncidentUpdate, db: Session = Depends(get_db), _user: str = Depends(require_auth)
+    incident_id: str,
+    body: IncidentUpdate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    _user: str = Depends(require_auth),
 ):
     incident = db.query(Incident).filter(Incident.id == incident_id).first()
     if not incident:
@@ -222,6 +235,14 @@ def update_incident(
     incident.updated_at = datetime.datetime.utcnow()
     db.commit()
     db.refresh(incident)
+    from statuspage import notifier as _notifier
+    background_tasks.add_task(
+        _notifier.notify_incident,
+        "updated",
+        incident.title,
+        incident.status.value,
+        incident.body,
+    )
     return incident
 
 
