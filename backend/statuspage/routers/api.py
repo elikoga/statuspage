@@ -34,6 +34,7 @@ class ServiceCreate(BaseModel):
     group: str | None = None
     check_enabled: bool = True
     is_public: bool = True
+    on_demand: bool = False
 
 
 class ServiceUpdate(BaseModel):
@@ -44,6 +45,7 @@ class ServiceUpdate(BaseModel):
     group: str | None = None
     check_enabled: bool | None = None
     is_public: bool | None = None
+    on_demand: bool | None = None
 
 
 class ServiceOut(BaseModel):
@@ -57,6 +59,7 @@ class ServiceOut(BaseModel):
     group: str | None
     check_enabled: bool
     is_public: bool
+    on_demand: bool
     last_checked_at: datetime.datetime | None
 
     model_config = {"from_attributes": True}
@@ -86,6 +89,7 @@ def create_service(body: ServiceCreate, db: Session = Depends(get_db), _user: st
         group=body.group,
         check_enabled=body.check_enabled,
         is_public=body.is_public,
+        on_demand=body.on_demand,
         created_at=datetime.datetime.utcnow(),
         updated_at=datetime.datetime.utcnow(),
     )
@@ -124,6 +128,8 @@ def update_service(
         service.check_enabled = body.check_enabled
     if body.is_public is not None:
         service.is_public = body.is_public
+    if body.on_demand is not None:
+        service.on_demand = body.on_demand
     service.updated_at = datetime.datetime.utcnow()
     db.commit()
     db.refresh(service)

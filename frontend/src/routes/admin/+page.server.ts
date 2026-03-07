@@ -25,7 +25,8 @@ export const actions: Actions = {
 				group: data.get('group') || null,
 				status: data.get('status') || 'operational',
 				is_public: data.get('is_public') === 'true',
-				check_enabled: data.get('check_enabled') === 'true'
+				check_enabled: data.get('check_enabled') === 'true',
+				on_demand: data.get('on_demand') === 'true'
 			})
 		});
 		if (!res.ok) return fail(res.status, { error: await res.text() });
@@ -44,7 +45,8 @@ export const actions: Actions = {
 				group: data.get('group') || null,
 				status: data.get('status') || undefined,
 				is_public: data.get('is_public') === 'true',
-				check_enabled: data.get('check_enabled') === 'true'
+				check_enabled: data.get('check_enabled') === 'true',
+				on_demand: data.get('on_demand') === 'true'
 			})
 		});
 		if (!res.ok) return fail(res.status, { error: await res.text() });

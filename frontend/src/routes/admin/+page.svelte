@@ -72,6 +72,10 @@
 						<input type="checkbox" name="check_enabled" value="true" checked class="rounded" />
 						Health check
 					</label>
+					<label class="flex items-center gap-2 text-sm text-gray-700">
+						<input type="checkbox" name="on_demand" value="true" class="rounded" />
+						On-demand
+					</label>
 				</div>
 				<button
 					type="submit"
@@ -134,6 +138,10 @@
 										<input type="checkbox" name="check_enabled" value="true" checked={(editingService as {check_enabled?: boolean}).check_enabled !== false} class="rounded" />
 										Health check
 									</label>
+									<label class="flex items-center gap-2 text-sm text-gray-700">
+										<input type="checkbox" name="on_demand" value="true" checked={(editingService as {on_demand?: boolean}).on_demand === true} class="rounded" />
+										On-demand
+									</label>
 								</div>
 									<div class="flex gap-2">
 										<button
@@ -162,12 +170,15 @@
 									{#if (service as {last_checked_at?: string | null}).last_checked_at}
 										<p class="text-xs text-gray-400">Last checked: {new Date((service as {last_checked_at?: string | null}).last_checked_at!).toLocaleTimeString()}</p>
 									{/if}
-								{#if !(service as {is_public?: boolean}).is_public}
-									<span class="inline-block text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 mt-0.5">Private</span>
-								{/if}
-								{#if !(service as {check_enabled?: boolean}).check_enabled}
-									<span class="inline-block text-xs px-1.5 py-0.5 rounded bg-yellow-50 text-yellow-700 mt-0.5">Checks off</span>
-								{/if}
+							{#if !(service as {is_public?: boolean}).is_public}
+								<span class="inline-block text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 mt-0.5">Private</span>
+							{/if}
+							{#if !(service as {check_enabled?: boolean}).check_enabled}
+								<span class="inline-block text-xs px-1.5 py-0.5 rounded bg-yellow-50 text-yellow-700 mt-0.5">Checks off</span>
+							{/if}
+							{#if (service as {on_demand?: boolean}).on_demand}
+								<span class="inline-block text-xs px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 mt-0.5">On-demand</span>
+							{/if}
 								</div>
 									<div class="flex items-center gap-3">
 										<span class="text-sm {STATUS_COLOR[service.status]}">{service.status}</span>

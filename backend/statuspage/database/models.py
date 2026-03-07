@@ -45,6 +45,7 @@ class Service(Base):
     check_enabled = Column(Boolean, default=True, nullable=False)
     last_checked_at = Column(DateTime, nullable=True)
     is_public = Column(Boolean, default=True, nullable=False)
+    on_demand = Column(Boolean, default=False, nullable=False)
 
 
 class Incident(Base):
