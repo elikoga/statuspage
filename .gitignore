@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.egg-info/
+dist/
+build/
+data/
+.env
+
+# Node
+node_modules/
+.svelte-kit/
+.output/
+build/
+
+# Misc
+.DS_Store
+*.sqlite

@@ -1,0 +1,27 @@
+[project]
+name = "statuspage"
+version = "0.1.0"
+description = "A status page tool"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.3",
+    "uvicorn>=0.35.0",
+    "pydantic>=2.8.2",
+    "pydantic-settings>=2.6.0",
+    "python-dotenv>=1.0.1",
+    "httpx>=0.28.0",
+    "psutil>=7.0.0",
+    "sqlalchemy>=2.0.36",
+    "alembic>=1.13.2",
+    "python-multipart>=0.0.20",
+]
+
+[project.scripts]
+statuspage = "statuspage.main:main"
+
+[build-system]
+requires = ["setuptools>=67.7.2", "wheel>=0.40.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
