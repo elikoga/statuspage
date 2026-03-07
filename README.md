@@ -119,6 +119,49 @@ uv run alembic upgrade head
 |---|---|
 | `/` | Public status page — service health + active incidents |
 | `/admin` | Admin UI — create/edit/delete services and incidents |
+| `/private` | Private status page — same as `/` but shows all services including non-public ones (requires auth) |
 | `/api/services` | REST API |
 | `/api/incidents` | REST API |
 | `/docs` | Auto-generated OpenAPI UI |
+
+
+## Pitfalls
+
+### Datetime serialization — always UTC-aware
+
+`datetime.datetime.utcnow()` returns a naive `datetime` (no `tzinfo`). Pydantic serializes
+naive datetimes without a timezone marker, and browsers parse timezone-naive ISO 8601
+strings as **local time**, not UTC. A service checked 5 seconds ago appears "1h ago" for a
+user in UTC+1.
+
+All response models (`ServiceOut`, `IncidentOut`) carry a `field_validator` that stamps
+`tzinfo=datetime.timezone.utc` on any naive datetime before serialization. Pydantic then
+emits `+00:00`-suffixed strings which browsers parse correctly. Do not remove those
+validators or switch back to naive datetimes.
+
+### Alembic `script_location` must be absolute
+
+`alembic.ini` contains `script_location = alembic` (relative). In any environment where
+the working directory is not the directory containing `alembic.ini` (systemd services,
+Nix store paths), alembic cannot find the migrations directory. `perform_db_upgrade()` in
+`main.py` overrides `script_location` to an absolute path derived from `ALEMBIC_INI_PATH`.
+
+### `fileConfig` in `alembic/env.py` — keep `disable_existing_loggers=False`
+
+`logging.config.fileConfig()` defaults to `disable_existing_loggers=True`. When alembic
+runs migrations during startup it silently kills all existing loggers including uvicorn's.
+The call in `alembic/env.py` explicitly passes `disable_existing_loggers=False`; do not
+revert that.
+
+### `lifespan` must contain `yield` directly
+
+`@asynccontextmanager` requires the decorated function to be an async generator — it must
+contain a `yield`. Delegating to a sub-coroutine (no `yield` in the decorated function)
+makes it a plain coroutine and FastAPI raises a runtime error on startup.
+
+### `frontend_path` assert must not run for binary-path deployments
+
+In Nix deployments `STATUSPAGE_FRONTEND_BINARY_PATH` is set and the pre-built Node binary
+is executed directly. The `frontend_path.exists()` assert (which checks for the source
+`frontend/` directory) must only run in the dev/build-from-source branches, never in the
+binary-path branch.
