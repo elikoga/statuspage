@@ -1,5 +1,6 @@
 import type { PageServerLoad, Actions } from './$types';
 import { fail } from '@sveltejs/kit';
+import type { Service, Incident } from '$lib/types';
 
 export const load: PageServerLoad = async ({ fetch }) => {
 	const [servicesRes, incidentsRes] = await Promise.all([
@@ -7,97 +8,91 @@ export const load: PageServerLoad = async ({ fetch }) => {
 		fetch('/api/incidents')
 	]);
 	return {
-		services: await servicesRes.json(),
-		incidents: await incidentsRes.json()
+		services: (await servicesRes.json()) as Service[],
+		incidents: (await incidentsRes.json()) as Incident[]
 	};
 };
+
+async function apiFetch(
+	fetch: typeof globalThis.fetch,
+	method: string,
+	url: string,
+	body?: object
+) {
+	const res = await fetch(url, {
+		method,
+		...(body !== undefined && {
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(body)
+		})
+	});
+	if (!res.ok) return fail(res.status, { error: await res.text() });
+}
 
 export const actions: Actions = {
 	createService: async ({ fetch, request }) => {
 		const data = await request.formData();
-		const res = await fetch('/api/services', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				name: data.get('name'),
-				description: data.get('description') || null,
-				url: data.get('url') || null,
-				site_url: data.get('site_url') || null,
-				group: data.get('group') || null,
-				status: data.get('status') || 'operational',
-				is_public: data.get('is_public') === 'true',
-				check_enabled: data.get('check_enabled') === 'true',
-				on_demand: data.get('on_demand') === 'true',
-				check_type: data.get('check_type') || 'http',
-				check_command: data.get('check_command') || null
-			})
+		return apiFetch(fetch, 'POST', '/api/services', {
+			name: data.get('name'),
+			description: data.get('description') || null,
+			url: data.get('url') || null,
+			site_url: data.get('site_url') || null,
+			group: data.get('group') || null,
+			status: data.get('status') || 'operational',
+			is_public: data.get('is_public') === 'true',
+			check_enabled: data.get('check_enabled') === 'true',
+			on_demand: data.get('on_demand') === 'true',
+			check_type: data.get('check_type') || 'http',
+			check_command: data.get('check_command') || null
 		});
-		if (!res.ok) return fail(res.status, { error: await res.text() });
 	},
 
 	updateService: async ({ fetch, request }) => {
 		const data = await request.formData();
 		const id = data.get('id') as string;
-		const res = await fetch(`/api/services/${id}`, {
-			method: 'PATCH',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				name: data.get('name') || undefined,
-				description: data.get('description') || undefined,
-				url: data.get('url') || undefined,
-				site_url: data.get('site_url') || null,
-				group: data.get('group') || null,
-				status: data.get('status') || undefined,
-				is_public: data.get('is_public') === 'true',
-				check_enabled: data.get('check_enabled') === 'true',
-				on_demand: data.get('on_demand') === 'true',
-				check_type: data.get('check_type') || undefined,
-				check_command: data.get('check_command') || null
-			})
+		return apiFetch(fetch, 'PATCH', `/api/services/${id}`, {
+			name: data.get('name') || undefined,
+			description: data.get('description') || undefined,
+			url: data.get('url') || undefined,
+			site_url: data.get('site_url') || null,
+			group: data.get('group') || null,
+			status: data.get('status') || undefined,
+			is_public: data.get('is_public') === 'true',
+			check_enabled: data.get('check_enabled') === 'true',
+			on_demand: data.get('on_demand') === 'true',
+			check_type: data.get('check_type') || undefined,
+			check_command: data.get('check_command') || null
 		});
-		if (!res.ok) return fail(res.status, { error: await res.text() });
 	},
 
 	deleteService: async ({ fetch, request }) => {
 		const data = await request.formData();
 		const id = data.get('id') as string;
-		const res = await fetch(`/api/services/${id}`, { method: 'DELETE' });
-		if (!res.ok) return fail(res.status, { error: await res.text() });
+		return apiFetch(fetch, 'DELETE', `/api/services/${id}`);
 	},
 
 	createIncident: async ({ fetch, request }) => {
 		const data = await request.formData();
-		const res = await fetch('/api/incidents', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				title: data.get('title'),
-				body: data.get('body') || '',
-				status: data.get('status') || 'investigating'
-			})
+		return apiFetch(fetch, 'POST', '/api/incidents', {
+			title: data.get('title'),
+			body: data.get('body') || '',
+			status: data.get('status') || 'investigating'
 		});
-		if (!res.ok) return fail(res.status, { error: await res.text() });
 	},
 
 	updateIncident: async ({ fetch, request }) => {
 		const data = await request.formData();
 		const id = data.get('id') as string;
-		const res = await fetch(`/api/incidents/${id}`, {
-			method: 'PATCH',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				title: data.get('title') || undefined,
-				body: data.get('body') || undefined,
-				status: data.get('status') || undefined
-			})
+		return apiFetch(fetch, 'PATCH', `/api/incidents/${id}`, {
+			title: data.get('title') || undefined,
+			body: data.get('body') || undefined,
+			status: data.get('status') || undefined
 		});
-		if (!res.ok) return fail(res.status, { error: await res.text() });
 	},
 
 	deleteIncident: async ({ fetch, request }) => {
 		const data = await request.formData();
 		const id = data.get('id') as string;
-		const res = await fetch(`/api/incidents/${id}`, { method: 'DELETE' });
-		if (!res.ok) return fail(res.status, { error: await res.text() });
+		return apiFetch(fetch, 'DELETE', `/api/incidents/${id}`);
 	}
 };

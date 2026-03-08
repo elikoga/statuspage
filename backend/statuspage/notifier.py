@@ -5,6 +5,8 @@ from email.mime.text import MIMEText
 
 import httpx
 
+from statuspage.config import global_settings as _cfg
+
 _log = logging.getLogger(__name__)
 
 
@@ -83,27 +85,25 @@ async def _email(
 
 async def notify(subject: str, body: str = "") -> None:
     """Send subject+body to every configured channel. Errors are logged, never raised."""
-    from statuspage.config import global_settings as cfg
-
     coros = []
 
-    if cfg.TELEGRAM_BOT_TOKEN and cfg.TELEGRAM_CHAT_ID:
+    if _cfg.TELEGRAM_BOT_TOKEN and _cfg.TELEGRAM_CHAT_ID:
         text = f"<b>{subject}</b>\n\n{body}".strip() if body else f"<b>{subject}</b>"
-        coros.append(_telegram(cfg.TELEGRAM_BOT_TOKEN, cfg.TELEGRAM_CHAT_ID, text))
+        coros.append(_telegram(_cfg.TELEGRAM_BOT_TOKEN, _cfg.TELEGRAM_CHAT_ID, text))
 
-    if cfg.SMTP_HOST and cfg.SMTP_TO:
-        from_addr = cfg.SMTP_FROM or cfg.SMTP_USER or "statuspage@localhost"
+    if _cfg.SMTP_HOST and _cfg.SMTP_TO:
+        from_addr = _cfg.SMTP_FROM or _cfg.SMTP_USER or "statuspage@localhost"
         coros.append(
             _email(
-                cfg.SMTP_HOST,
-                cfg.SMTP_PORT,
-                cfg.SMTP_USER,
-                cfg.SMTP_PASSWORD,
+                _cfg.SMTP_HOST,
+                _cfg.SMTP_PORT,
+                _cfg.SMTP_USER,
+                _cfg.SMTP_PASSWORD,
                 from_addr,
-                cfg.SMTP_TO,
+                _cfg.SMTP_TO,
                 subject,
                 body,
-                cfg.SMTP_USE_STARTTLS,
+                _cfg.SMTP_USE_STARTTLS,
             )
         )
 
@@ -119,14 +119,13 @@ async def notify(subject: str, body: str = "") -> None:
 
 async def notify_status_change(service_name: str, old_status: str, new_status: str) -> None:
     """Called by the health checker when a service's status changes."""
-    from statuspage.config import global_settings as cfg
     if old_status == new_status:
         return
     if new_status == "operational":
         subject = f"[StatusPage] {service_name} recovered ({old_status} -> operational)"
     else:
         subject = f"[StatusPage] {service_name}: {old_status} -> {new_status}"
-    await notify(subject, body=cfg.BASE_URL)
+    await notify(subject, body=_cfg.BASE_URL)
 
 async def notify_incident(action: str, title: str, status: str, body: str) -> None:
     """Called when an incident is created or updated."""

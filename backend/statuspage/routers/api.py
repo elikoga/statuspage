@@ -1,5 +1,6 @@
 import datetime
 import uuid
+from collections import defaultdict
 
 from fastapi import APIRouter, BackgroundTasks, Cookie, Depends, HTTPException, Query
 from pydantic import BaseModel, field_validator
@@ -21,6 +22,28 @@ def require_auth(
     if not entry:
         raise HTTPException(status_code=401, detail="Session expired or invalid")
     return entry["username"]
+
+
+def _now() -> datetime.datetime:
+    return datetime.datetime.utcnow()
+
+
+def _get_or_404(db, model, id: str, detail: str = "Not found"):
+    obj = db.query(model).filter(model.id == id).first()
+    if obj is None:
+        raise HTTPException(status_code=404, detail=detail)
+    return obj
+
+
+class _UTCModel(BaseModel):
+    model_config = {"from_attributes": True}
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def _utc(cls, v):
+        if isinstance(v, datetime.datetime) and v.tzinfo is None:
+            return v.replace(tzinfo=datetime.timezone.utc)
+        return v
 
 
 # ── Services ──────────────────────────────────────────────────────────────────
@@ -54,7 +77,7 @@ class ServiceUpdate(BaseModel):
     check_command: str | None = None
 
 
-class ServiceOut(BaseModel):
+class ServiceOut(_UTCModel):
     id: str
     name: str
     description: str | None
@@ -70,15 +93,6 @@ class ServiceOut(BaseModel):
     last_checked_at: datetime.datetime | None
     check_type: CheckType
     check_command: str | None
-
-    model_config = {"from_attributes": True}
-
-    @field_validator("created_at", "updated_at", "last_checked_at", mode="before")
-    @classmethod
-    def ensure_utc(cls, v: datetime.datetime | None) -> datetime.datetime | None:
-        if isinstance(v, datetime.datetime) and v.tzinfo is None:
-            return v.replace(tzinfo=datetime.timezone.utc)
-        return v
 
 
 @router.get("/services", response_model=list[ServiceOut])
@@ -109,11 +123,11 @@ def create_service(body: ServiceCreate, db: Session = Depends(get_db), _user: st
         on_demand=body.on_demand,
         check_type=body.check_type,
         check_command=body.check_command,
-        created_at=datetime.datetime.utcnow(),
-        updated_at=datetime.datetime.utcnow(),
+        created_at=_now(),
+        updated_at=_now(),
     )
     db.add(service)
-    now = datetime.datetime.utcnow()
+    now = _now()
     db.add(ServiceStatusHistory(service_id=service.id, status=service.status, started_at=now))
     db.commit()
     db.refresh(service)
@@ -122,42 +136,21 @@ def create_service(body: ServiceCreate, db: Session = Depends(get_db), _user: st
 
 @router.get("/services/{service_id}", response_model=ServiceOut)
 def get_service(service_id: str, db: Session = Depends(get_db)):
-    service = db.query(Service).filter(Service.id == service_id).first()
-    if not service:
-        raise HTTPException(status_code=404, detail="Service not found")
-    return service
+    return _get_or_404(db, Service, service_id, "Service not found")
 
 
 @router.patch("/services/{service_id}", response_model=ServiceOut)
 def update_service(
     service_id: str, body: ServiceUpdate, db: Session = Depends(get_db), _user: str = Depends(require_auth)
 ):
-    service = db.query(Service).filter(Service.id == service_id).first()
-    if not service:
-        raise HTTPException(status_code=404, detail="Service not found")
-    if body.name is not None:
-        service.name = body.name
-    if body.description is not None:
-        service.description = body.description
-    if body.url is not None:
-        service.url = body.url
-    if "site_url" in body.model_fields_set:
-        service.site_url = body.site_url
-    if body.status is not None:
-        service.status = body.status
-    if "group" in body.model_fields_set:
-        service.group = body.group
-    if body.check_enabled is not None:
-        service.check_enabled = body.check_enabled
-    if body.is_public is not None:
-        service.is_public = body.is_public
-    if body.on_demand is not None:
-        service.on_demand = body.on_demand
-    if body.check_type is not None:
-        service.check_type = body.check_type
-    if "check_command" in body.model_fields_set:
-        service.check_command = body.check_command
-    service.updated_at = datetime.datetime.utcnow()
+    service = _get_or_404(db, Service, service_id, "Service not found")
+    _non_nullable = {'name', 'status', 'check_enabled', 'is_public', 'on_demand', 'check_type'}
+    for field in body.model_fields_set:
+        value = getattr(body, field)
+        if value is None and field in _non_nullable:
+            continue
+        setattr(service, field, value)
+    service.updated_at = _now()
     db.commit()
     db.refresh(service)
     return service
@@ -165,13 +158,9 @@ def update_service(
 
 @router.delete("/services/{service_id}", status_code=204)
 def delete_service(service_id: str, db: Session = Depends(get_db), _user: str = Depends(require_auth)):
-    service = db.query(Service).filter(Service.id == service_id).first()
-    if not service:
-        raise HTTPException(status_code=404, detail="Service not found")
+    service = _get_or_404(db, Service, service_id, "Service not found")
     db.delete(service)
     db.commit()
-
-
 
 
 # ── History ──────────────────────────────────────────────────────────────────
@@ -223,7 +212,7 @@ def get_history(
     if not service_ids:
         return {}
 
-    now = datetime.datetime.utcnow()
+    now = _now()
     window_start = now - datetime.timedelta(days=days + 1)  # +1 for carry-over
     rows = (
         db.query(ServiceStatusHistory)
@@ -235,12 +224,13 @@ def get_history(
         .all()
     )
 
-    from collections import defaultdict
     rows_by_service: dict[str, list] = defaultdict(list)
     for row in rows:
         rows_by_service[row.service_id].append(row)
 
     return {svc_id: _compute_daily_history(rows_by_service[svc_id], days, now) for svc_id in service_ids}
+
+
 # ── Incidents ─────────────────────────────────────────────────────────────────
 
 
@@ -256,22 +246,13 @@ class IncidentUpdate(BaseModel):
     status: IncidentStatus | None = None
 
 
-class IncidentOut(BaseModel):
+class IncidentOut(_UTCModel):
     id: str
     title: str
     body: str
     status: IncidentStatus
     created_at: datetime.datetime
     updated_at: datetime.datetime
-
-    model_config = {"from_attributes": True}
-
-    @field_validator("created_at", "updated_at", mode="before")
-    @classmethod
-    def ensure_utc(cls, v: datetime.datetime | None) -> datetime.datetime | None:
-        if isinstance(v, datetime.datetime) and v.tzinfo is None:
-            return v.replace(tzinfo=datetime.timezone.utc)
-        return v
 
 
 @router.get("/incidents", response_model=list[IncidentOut])
@@ -291,8 +272,8 @@ def create_incident(
         title=body.title,
         body=body.body,
         status=body.status,
-        created_at=datetime.datetime.utcnow(),
-        updated_at=datetime.datetime.utcnow(),
+        created_at=_now(),
+        updated_at=_now(),
     )
     db.add(incident)
     db.commit()
@@ -306,10 +287,7 @@ def create_incident(
 
 @router.get("/incidents/{incident_id}", response_model=IncidentOut)
 def get_incident(incident_id: str, db: Session = Depends(get_db)):
-    incident = db.query(Incident).filter(Incident.id == incident_id).first()
-    if not incident:
-        raise HTTPException(status_code=404, detail="Incident not found")
-    return incident
+    return _get_or_404(db, Incident, incident_id, "Incident not found")
 
 
 @router.patch("/incidents/{incident_id}", response_model=IncidentOut)
@@ -320,16 +298,14 @@ def update_incident(
     db: Session = Depends(get_db),
     _user: str = Depends(require_auth),
 ):
-    incident = db.query(Incident).filter(Incident.id == incident_id).first()
-    if not incident:
-        raise HTTPException(status_code=404, detail="Incident not found")
+    incident = _get_or_404(db, Incident, incident_id, "Incident not found")
     if body.title is not None:
         incident.title = body.title
     if body.body is not None:
         incident.body = body.body
     if body.status is not None:
         incident.status = body.status
-    incident.updated_at = datetime.datetime.utcnow()
+    incident.updated_at = _now()
     db.commit()
     db.refresh(incident)
     from statuspage import notifier as _notifier
@@ -345,8 +321,6 @@ def update_incident(
 
 @router.delete("/incidents/{incident_id}", status_code=204)
 def delete_incident(incident_id: str, db: Session = Depends(get_db), _user: str = Depends(require_auth)):
-    incident = db.query(Incident).filter(Incident.id == incident_id).first()
-    if not incident:
-        raise HTTPException(status_code=404, detail="Incident not found")
+    incident = _get_or_404(db, Incident, incident_id, "Incident not found")
     db.delete(incident)
     db.commit()

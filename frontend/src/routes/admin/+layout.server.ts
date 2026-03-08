@@ -1,11 +1,7 @@
-import { redirect } from '@sveltejs/kit';
 import type { LayoutServerLoad } from './$types';
+import { requireAuth } from '$lib/server/auth';
 
-export const load: LayoutServerLoad = async ({ fetch, url }) => {
-	const res = await fetch('/auth/me');
-	if (!res.ok) {
-		throw redirect(303, `/login?next=${encodeURIComponent(url.pathname)}`);
-	}
-	const { username } = await res.json();
-	return { username };
+export const load: LayoutServerLoad = async ({ fetch }) => {
+  const username = await requireAuth(fetch);
+  return { username };
 };

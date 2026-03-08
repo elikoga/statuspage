@@ -1,29 +1,5 @@
 <script lang="ts">
-	interface DayStatus {
-		date: string;
-		status: string;
-	}
-
-	interface Service {
-		id: string;
-		name: string;
-		description?: string | null;
-		url?: string | null;
-		site_url?: string | null;
-		status: string;
-		group?: string | null;
-		is_public?: boolean;
-		last_checked_at?: string | null;
-	}
-
-	interface Incident {
-		id: string;
-		title: string;
-		body: string;
-		status: string;
-		created_at: string;
-	}
-
+	import type { Service, Incident, DayStatus } from '$lib/types';
 	let {
 		services,
 		incidents,
@@ -82,14 +58,14 @@
 
 	const openIncidents = $derived(incidents.filter((i) => i.status !== 'resolved'));
 
-	const overallStatus = $derived(() => {
+	const overallStatus = $derived.by(() => {
 		const active = services.filter((s) => s.status !== 'offline');
 		if (active.some((s) => s.status === 'outage')) return 'outage';
 		if (active.some((s) => s.status === 'degraded')) return 'degraded';
 		return 'operational';
 	});
 
-	const serviceGroups = $derived(() => {
+	const serviceGroups = $derived.by(() => {
 		const groups = new Map<string, Service[]>();
 		for (const svc of services) {
 			const g = svc.group ?? 'Other';
@@ -121,15 +97,15 @@
 		<!-- Overall banner -->
 		<div
 			class="rounded-lg p-4 text-white font-medium text-center
-				{overallStatus() === 'operational'
+				{overallStatus === 'operational'
 				? 'bg-green-500'
-				: overallStatus() === 'degraded'
+				: overallStatus === 'degraded'
 					? 'bg-yellow-500'
 					: 'bg-red-500'}"
 		>
-			{#if overallStatus() === 'operational'}
+			{#if overallStatus === 'operational'}
 				All systems operational
-			{:else if overallStatus() === 'degraded'}
+			{:else if overallStatus === 'degraded'}
 				Some systems are experiencing degraded performance
 			{:else}
 				One or more systems are experiencing an outage
@@ -168,7 +144,7 @@
 				<p class="text-gray-500 text-sm">No services configured yet.</p>
 			{:else}
 				<div class="space-y-5">
-					{#each [...serviceGroups()] as [groupName, groupServices]}
+					{#each [...serviceGroups] as [groupName, groupServices]}
 						<div>
 							<h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 px-1">
 								{groupName}

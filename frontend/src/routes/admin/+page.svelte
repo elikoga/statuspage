@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import type { PageData } from './$types';
+	import type { Service } from '$lib/types';
 
 	let { data }: { data: PageData } = $props();
 
@@ -14,7 +15,7 @@
 		offline: 'text-gray-500'
 	};
 
-	let editingService: (typeof data.services)[number] | null = $state(null);
+	let editingService: Service | null = $state(null);
 	let editingIncident: (typeof data.incidents)[number] | null = $state(null);
 	let newCheckType: string = $state('http');
 </script>
@@ -147,27 +148,27 @@
 								/>
 							<input
 								name="site_url"
-								value={(editingService as {site_url?: string | null}).site_url ?? ''}
+								value={editingService.site_url ?? ''}
 								placeholder="Site URL"
 								class="border border-gray-300 rounded px-3 py-1.5 text-sm sm:col-span-2"
 							/>
 								<input
 									name="group"
-									value={(editingService as {group?: string | null}).group ?? ''}
+									value={editingService.group ?? ''}
 									placeholder="Group"
 									class="border border-gray-300 rounded px-3 py-1.5 text-sm sm:col-span-2"
 								/>
 								<div class="flex items-center gap-4 sm:col-span-4">
 									<label class="flex items-center gap-2 text-sm text-gray-700">
-										<input type="checkbox" name="is_public" value="true" checked={(editingService as {is_public?: boolean}).is_public !== false} class="rounded" />
+										<input type="checkbox" name="is_public" value="true" checked={editingService.is_public !== false} class="rounded" />
 										Public
 									</label>
 									<label class="flex items-center gap-2 text-sm text-gray-700">
-										<input type="checkbox" name="check_enabled" value="true" checked={(editingService as {check_enabled?: boolean}).check_enabled !== false} class="rounded" />
+										<input type="checkbox" name="check_enabled" value="true" checked={editingService.check_enabled !== false} class="rounded" />
 										Health check
 									</label>
 									<label class="flex items-center gap-2 text-sm text-gray-700">
-										<input type="checkbox" name="on_demand" value="true" checked={(editingService as {on_demand?: boolean}).on_demand === true} class="rounded" />
+										<input type="checkbox" name="on_demand" value="true" checked={editingService.on_demand === true} class="rounded" />
 										On-demand
 									</label>
 								</div>
@@ -203,9 +204,9 @@
 							{:else}
 								<div class="flex items-center justify-between">
 								<div>
-									{#if (service as {site_url?: string | null}).site_url || ((service as {url?: string | null}).url ?? '').startsWith('https://')}
+									{#if service.site_url || (service.url ?? '').startsWith('https://')}
 										<a
-											href={(service as {site_url?: string | null}).site_url ?? (service as {url?: string | null}).url}
+										href={service.site_url ?? service.url}
 											target="_blank"
 											rel="noopener noreferrer"
 											class="font-medium text-gray-900 hover:underline"
@@ -216,25 +217,25 @@
 									{#if service.description}
 										<p class="text-xs text-gray-500">{service.description}</p>
 									{/if}
-									{#if (service as {group?: string | null}).group}
-										<p class="text-xs text-gray-400 mt-0.5">Group: {(service as {group?: string | null}).group}</p>
+									{#if service.group}
+									<p class="text-xs text-gray-400 mt-0.5">Group: {service.group}</p>
 									{/if}
-								{#if (service as {site_url?: string | null}).site_url}
-									<p class="text-xs mt-0.5"><a href={(service as {site_url?: string | null}).site_url} target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">{(service as {site_url?: string | null}).site_url}</a></p>
+							{#if service.site_url}
+								<p class="text-xs mt-0.5"><a href={service.site_url} target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">{service.site_url}</a></p>
 								{/if}
-									{#if (service as {last_checked_at?: string | null}).last_checked_at}
-										<p class="text-xs text-gray-400">Last checked: {new Date((service as {last_checked_at?: string | null}).last_checked_at!).toLocaleTimeString()}</p>
+									{#if service.last_checked_at}
+									<p class="text-xs text-gray-400">Last checked: {new Date(service.last_checked_at!).toLocaleTimeString()}</p>
 									{/if}
-							{#if !(service as {is_public?: boolean}).is_public}
+					{#if !service.is_public}
 								<span class="inline-block text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 mt-0.5">Private</span>
 							{/if}
-							{#if !(service as {check_enabled?: boolean}).check_enabled}
+					{#if !service.check_enabled}
 								<span class="inline-block text-xs px-1.5 py-0.5 rounded bg-yellow-50 text-yellow-700 mt-0.5">Checks off</span>
 							{/if}
-							{#if (service as {on_demand?: boolean}).on_demand}
+					{#if service.on_demand}
 								<span class="inline-block text-xs px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 mt-0.5">On-demand</span>
 							{/if}
-						{#if (service as {check_type?: string}).check_type === 'command'}
+					{#if service.check_type === 'command'}
 							<span class="inline-block text-xs px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 mt-0.5">Command check</span>
 						{/if}
 								</div>
