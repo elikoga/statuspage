@@ -33,6 +33,12 @@ in
     };
 
 
+    check-interval-seconds = lib.mkOption {
+      type = lib.types.int;
+      default = 10;
+      description = "How often (in seconds) to run health checks.";
+    };
+
     smtp-host = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
       default = null;
@@ -107,6 +113,7 @@ in
         UVICORN_PORT = builtins.toString cfg.listen-port;
         STATUSPAGE_DATA_PATH = cfg.data-path;
         STATUSPAGE_BASE_URL = cfg.base-url;
+        STATUSPAGE_CHECK_INTERVAL_SECONDS = builtins.toString cfg.check-interval-seconds;
       } // lib.optionalAttrs (cfg.smtp-host != null) {
         STATUSPAGE_SMTP_HOST = cfg.smtp-host;
         STATUSPAGE_SMTP_PORT = builtins.toString cfg.smtp-port;

@@ -132,7 +132,7 @@ async def run_checks(db_engine) -> None:
 
     # Phase 2: run all checks with no DB connection held.
     async with httpx.AsyncClient(
-        timeout=httpx.Timeout(10.0),
+    timeout=httpx.Timeout(5.0),
         follow_redirects=True,
     ) as client:
         async def _dispatch(name: str, url: str | None, check_type: str, cmd: str | None) -> str:

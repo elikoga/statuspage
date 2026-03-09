@@ -14,7 +14,7 @@ class GlobalSettings(BaseSettings):
     OIDC_CLIENT_ID: str | None = None
     OIDC_CLIENT_SECRET: str | None = None
     OIDC_PROVIDER_NAME: str = "Keycloak"
-    CHECK_INTERVAL_SECONDS: int = 30
+    CHECK_INTERVAL_SECONDS: int = 10
 
     # ── Email (SMTP) notifications ───────────────────────────────────────────
     SMTP_HOST: str | None = None
