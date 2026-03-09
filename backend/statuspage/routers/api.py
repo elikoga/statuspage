@@ -1,3 +1,4 @@
+import base64
 import datetime
 import uuid
 from collections import defaultdict
@@ -374,6 +375,7 @@ def get_notification_settings(db: Session = Depends(get_db), _user: str = Depend
         },
         "discord": {
             "bot_token_set": bool(dc and dc.bot_token),
+            "app_id": base64.b64decode(dc.bot_token.split('.')[0] + '==').decode() if (dc and dc.bot_token) else None,
         },
     }
 

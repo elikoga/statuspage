@@ -448,6 +448,14 @@
 							<button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white rounded px-4 py-2 text-sm font-medium">Save</button>
 						</div>
 					</form>
+					{#if data.notifSettings.discord.app_id}
+						<a
+							href="https://discord.com/oauth2/authorize?client_id={data.notifSettings.discord.app_id}&scope=bot&permissions=0"
+							target="_blank"
+							rel="noopener noreferrer"
+							class="inline-flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-800 underline mb-4 block"
+						>Invite bot to server</a>
+					{/if}
 					<h4 class="text-sm font-medium text-gray-700 mb-2">Destinations</h4>
 					<form method="POST" action="?/addDiscordDestination" use:enhance class="flex flex-wrap gap-2 mb-4">
 						<select name="destination_type" class="border border-gray-300 rounded px-3 py-2 text-sm">
