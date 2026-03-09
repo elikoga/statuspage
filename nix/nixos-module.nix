@@ -44,6 +44,48 @@ in
       description = "Telegram chat ID to send notifications to. Optional.";
     };
 
+    smtp-host = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      description = "SMTP server hostname. Enables email notifications when set.";
+    };
+
+    smtp-port = lib.mkOption {
+      type = lib.types.int;
+      default = 587;
+      description = "SMTP server port. Use 465 for SMTP_SSL, 587 for STARTTLS, 25 for plain relay.";
+    };
+
+    smtp-user = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      description = "SMTP username. Optional — omit for unauthenticated relay.";
+    };
+
+    smtp-password-file = lib.mkOption {
+      type = lib.types.nullOr lib.types.path;
+      default = null;
+      description = "Path to a file containing the SMTP password. Optional.";
+    };
+
+    smtp-from = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      description = "From address for outgoing mail. Defaults to smtp-user when unset.";
+    };
+
+    smtp-to = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      description = "Recipient address for email notifications. Required to enable email.";
+    };
+
+    smtp-use-starttls = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Whether to issue STARTTLS after connecting. Set false for port-465 SSL or plain relay.";
+    };
+
     nginx-vhost-name = lib.mkOption {
       type = lib.types.str;
       description = "Name of the nginx virtual host (typically the domain name).";
@@ -64,9 +106,13 @@ in
           tokenLoader = lib.optionalString (cfg.telegram-bot-token-file != null) ''
             export STATUSPAGE_TELEGRAM_BOT_TOKEN="$(cat ${cfg.telegram-bot-token-file})"
           '';
+          passwordLoader = lib.optionalString (cfg.smtp-password-file != null) ''
+            export STATUSPAGE_SMTP_PASSWORD="$(cat ${cfg.smtp-password-file})"
+          '';
         in
         ''
           ${tokenLoader}
+          ${passwordLoader}
           exec ${cfg.package}/bin/statuspage
         '';
 
@@ -83,6 +129,16 @@ in
         STATUSPAGE_BASE_URL = cfg.base-url;
       } // lib.optionalAttrs (cfg.telegram-chat-id != null) {
         STATUSPAGE_TELEGRAM_CHAT_ID = cfg.telegram-chat-id;
+      } // lib.optionalAttrs (cfg.smtp-host != null) {
+        STATUSPAGE_SMTP_HOST = cfg.smtp-host;
+        STATUSPAGE_SMTP_PORT = builtins.toString cfg.smtp-port;
+        STATUSPAGE_SMTP_USE_STARTTLS = if cfg.smtp-use-starttls then "true" else "false";
+      } // lib.optionalAttrs (cfg.smtp-user != null) {
+        STATUSPAGE_SMTP_USER = cfg.smtp-user;
+      } // lib.optionalAttrs (cfg.smtp-from != null) {
+        STATUSPAGE_SMTP_FROM = cfg.smtp-from;
+      } // lib.optionalAttrs (cfg.smtp-to != null) {
+        STATUSPAGE_SMTP_TO = cfg.smtp-to;
       };
 
     };
