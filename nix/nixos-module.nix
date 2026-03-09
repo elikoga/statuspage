@@ -76,6 +76,24 @@ in
       description = "Whether to issue STARTTLS after connecting. Set false for port-465 SSL or plain relay.";
     };
 
+    oidc-issuer-url = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      description = "OIDC issuer URL (e.g. https://auth.example.com/realms/myrealm). Enables SSO when set together with oidc-client-id and oidc-client-secret-file.";
+    };
+
+    oidc-client-id = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      description = "OIDC client ID registered with the issuer.";
+    };
+
+    oidc-client-secret-file = lib.mkOption {
+      type = lib.types.nullOr lib.types.path;
+      default = null;
+      description = "Path to a file containing the OIDC client secret.";
+    };
+
     nginx-vhost-name = lib.mkOption {
       type = lib.types.str;
       description = "Name of the nginx virtual host (typically the domain name).";
@@ -96,9 +114,13 @@ in
           passwordLoader = lib.optionalString (cfg.smtp-password-file != null) ''
             export STATUSPAGE_SMTP_PASSWORD="$(cat ${cfg.smtp-password-file})"
           '';
+          oidcSecretLoader = lib.optionalString (cfg.oidc-client-secret-file != null) ''
+            export STATUSPAGE_OIDC_CLIENT_SECRET="$(cat ${cfg.oidc-client-secret-file})"
+          '';
         in
         ''
           ${passwordLoader}
+          ${oidcSecretLoader}
           exec ${cfg.package}/bin/statuspage
         '';
 
@@ -122,6 +144,10 @@ in
         STATUSPAGE_SMTP_USER = cfg.smtp-user;
       } // lib.optionalAttrs (cfg.smtp-from != null) {
         STATUSPAGE_SMTP_FROM = cfg.smtp-from;
+      } // lib.optionalAttrs (cfg.oidc-issuer-url != null) {
+        STATUSPAGE_OIDC_ISSUER_URL = cfg.oidc-issuer-url;
+      } // lib.optionalAttrs (cfg.oidc-client-id != null) {
+        STATUSPAGE_OIDC_CLIENT_ID = cfg.oidc-client-id;
       };
 
     };
