@@ -32,17 +32,6 @@ in
       description = "Port on which the backend listens for incoming connections.";
     };
 
-    telegram-bot-token-file = lib.mkOption {
-      type = lib.types.nullOr lib.types.path;
-      default = null;
-      description = "Path to a file containing the Telegram bot token. Optional.";
-    };
-
-    telegram-chat-id = lib.mkOption {
-      type = lib.types.nullOr lib.types.str;
-      default = null;
-      description = "Telegram chat ID to send notifications to. Optional.";
-    };
 
     smtp-host = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
@@ -74,11 +63,6 @@ in
       description = "From address for outgoing mail. Defaults to smtp-user when unset.";
     };
 
-    smtp-to = lib.mkOption {
-      type = lib.types.nullOr lib.types.str;
-      default = null;
-      description = "Recipient address for email notifications. Required to enable email.";
-    };
 
     smtp-use-starttls = lib.mkOption {
       type = lib.types.bool;
@@ -103,15 +87,11 @@ in
       path = with pkgs; [ bash coreutils curl openssh nix python3 "/run/current-system/sw" ];
       script =
         let
-          tokenLoader = lib.optionalString (cfg.telegram-bot-token-file != null) ''
-            export STATUSPAGE_TELEGRAM_BOT_TOKEN="$(cat ${cfg.telegram-bot-token-file})"
-          '';
           passwordLoader = lib.optionalString (cfg.smtp-password-file != null) ''
             export STATUSPAGE_SMTP_PASSWORD="$(cat ${cfg.smtp-password-file})"
           '';
         in
         ''
-          ${tokenLoader}
           ${passwordLoader}
           exec ${cfg.package}/bin/statuspage
         '';
@@ -127,8 +107,6 @@ in
         UVICORN_PORT = builtins.toString cfg.listen-port;
         STATUSPAGE_DATA_PATH = cfg.data-path;
         STATUSPAGE_BASE_URL = cfg.base-url;
-      } // lib.optionalAttrs (cfg.telegram-chat-id != null) {
-        STATUSPAGE_TELEGRAM_CHAT_ID = cfg.telegram-chat-id;
       } // lib.optionalAttrs (cfg.smtp-host != null) {
         STATUSPAGE_SMTP_HOST = cfg.smtp-host;
         STATUSPAGE_SMTP_PORT = builtins.toString cfg.smtp-port;
@@ -137,8 +115,6 @@ in
         STATUSPAGE_SMTP_USER = cfg.smtp-user;
       } // lib.optionalAttrs (cfg.smtp-from != null) {
         STATUSPAGE_SMTP_FROM = cfg.smtp-from;
-      } // lib.optionalAttrs (cfg.smtp-to != null) {
-        STATUSPAGE_SMTP_TO = cfg.smtp-to;
       };
 
     };

@@ -97,3 +97,32 @@ class ServiceStatusHistory(Base):
     __table_args__ = (
         Index("ix_ssh_service_started", "service_id", "started_at"),
     )
+
+
+class EmailSubscriber(Base):
+    __tablename__ = "email_subscribers"
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    email = Column(String, nullable=False, unique=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+
+
+class TelegramConfig(Base):
+    __tablename__ = "telegram_config"
+    singleton_id = Column(String, primary_key=True, default="default")
+    bot_token = Column(String, nullable=True)
+    chat_id = Column(String, nullable=True)
+
+
+class DiscordConfig(Base):
+    __tablename__ = "discord_config"
+    singleton_id = Column(String, primary_key=True, default="default")
+    bot_token = Column(String, nullable=True)
+
+
+class DiscordDestination(Base):
+    __tablename__ = "discord_destinations"
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    destination_type = Column(String, nullable=False)  # "channel" or "user"
+    destination_id = Column(String, nullable=False)
+    label = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)

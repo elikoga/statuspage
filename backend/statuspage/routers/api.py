@@ -7,7 +7,7 @@ from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
 from statuspage.database.connection import get_db
-from statuspage.database.models import CheckType, Incident, IncidentStatus, Service, ServiceStatus, ServiceStatusHistory
+from statuspage.database.models import CheckType, Incident, IncidentStatus, Service, ServiceStatus, ServiceStatusHistory, EmailSubscriber, TelegramConfig, DiscordConfig, DiscordDestination
 from statuspage import auth as _auth
 
 router = APIRouter(tags=["api"])
@@ -323,4 +323,134 @@ def update_incident(
 def delete_incident(incident_id: str, db: Session = Depends(get_db), _user: str = Depends(require_auth)):
     incident = _get_or_404(db, Incident, incident_id, "Incident not found")
     db.delete(incident)
+    db.commit()
+
+
+
+# ── Notifications ──────────────────────────────────────────────────────────────────────────────────
+
+
+class TelegramConfigIn(BaseModel):
+    bot_token: str | None = None
+    chat_id: str | None = None
+
+
+class DiscordConfigIn(BaseModel):
+    bot_token: str | None = None
+
+
+class EmailSubscriberCreate(BaseModel):
+    email: str
+
+
+class EmailSubscriberOut(_UTCModel):
+    id: str
+    email: str
+    created_at: datetime.datetime
+
+
+class DiscordDestinationCreate(BaseModel):
+    destination_type: str  # "channel" or "user"
+    destination_id: str
+    label: str | None = None
+
+
+class DiscordDestinationOut(_UTCModel):
+    id: str
+    destination_type: str
+    destination_id: str
+    label: str | None
+    created_at: datetime.datetime
+
+
+@router.get("/notifications/settings")
+def get_notification_settings(db: Session = Depends(get_db), _user: str = Depends(require_auth)):
+    tg = db.get(TelegramConfig, "default")
+    dc = db.get(DiscordConfig, "default")
+    return {
+        "telegram": {
+            "bot_token_set": bool(tg and tg.bot_token),
+            "chat_id": tg.chat_id if tg else None,
+        },
+        "discord": {
+            "bot_token_set": bool(dc and dc.bot_token),
+        },
+    }
+
+
+@router.put("/notifications/telegram", status_code=204)
+def upsert_telegram(body: TelegramConfigIn, db: Session = Depends(get_db), _user: str = Depends(require_auth)):
+    tg = db.get(TelegramConfig, "default")
+    if tg is None:
+        tg = TelegramConfig(singleton_id="default")
+        db.add(tg)
+    tg.bot_token = body.bot_token
+    tg.chat_id = body.chat_id
+    db.commit()
+
+
+@router.put("/notifications/discord", status_code=204)
+def upsert_discord(body: DiscordConfigIn, db: Session = Depends(get_db), _user: str = Depends(require_auth)):
+    dc = db.get(DiscordConfig, "default")
+    if dc is None:
+        dc = DiscordConfig(singleton_id="default")
+        db.add(dc)
+    dc.bot_token = body.bot_token
+    db.commit()
+
+
+@router.get("/notifications/email-subscribers", response_model=list[EmailSubscriberOut])
+def list_email_subscribers(db: Session = Depends(get_db), _user: str = Depends(require_auth)):
+    return db.query(EmailSubscriber).order_by(EmailSubscriber.created_at).all()
+
+
+@router.post("/notifications/email-subscribers", response_model=EmailSubscriberOut, status_code=201)
+def add_email_subscriber(body: EmailSubscriberCreate, db: Session = Depends(get_db), _user: str = Depends(require_auth)):
+    existing = db.query(EmailSubscriber).filter(EmailSubscriber.email == body.email).first()
+    if existing:
+        raise HTTPException(status_code=409, detail="Email already subscribed")
+    sub = EmailSubscriber(id=str(uuid.uuid4()), email=body.email, created_at=_now())
+    db.add(sub)
+    db.commit()
+    db.refresh(sub)
+    return sub
+
+
+@router.delete("/notifications/email-subscribers/{sub_id}", status_code=204)
+def delete_email_subscriber(sub_id: str, db: Session = Depends(get_db), _user: str = Depends(require_auth)):
+    sub = _get_or_404(db, EmailSubscriber, sub_id, "Subscriber not found")
+    db.delete(sub)
+    db.commit()
+
+
+@router.get("/notifications/discord/destinations", response_model=list[DiscordDestinationOut])
+def list_discord_destinations(db: Session = Depends(get_db), _user: str = Depends(require_auth)):
+    return db.query(DiscordDestination).order_by(DiscordDestination.created_at).all()
+
+
+@router.post("/notifications/discord/destinations", response_model=DiscordDestinationOut, status_code=201)
+def add_discord_destination(
+    body: DiscordDestinationCreate,
+    db: Session = Depends(get_db),
+    _user: str = Depends(require_auth),
+):
+    if body.destination_type not in ("channel", "user"):
+        raise HTTPException(status_code=422, detail="destination_type must be 'channel' or 'user'")
+    dest = DiscordDestination(
+        id=str(uuid.uuid4()),
+        destination_type=body.destination_type,
+        destination_id=body.destination_id,
+        label=body.label,
+        created_at=_now(),
+    )
+    db.add(dest)
+    db.commit()
+    db.refresh(dest)
+    return dest
+
+
+@router.delete("/notifications/discord/destinations/{dest_id}", status_code=204)
+def delete_discord_destination(dest_id: str, db: Session = Depends(get_db), _user: str = Depends(require_auth)):
+    dest = _get_or_404(db, DiscordDestination, dest_id, "Destination not found")
+    db.delete(dest)
     db.commit()

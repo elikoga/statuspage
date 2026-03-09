@@ -68,7 +68,7 @@
 				<input
 					name="group"
 					placeholder="Group (e.g. Personal)"
-					class="border border-gray-300 rounded px-3 py-2 text-sm"
+					class="border border-gray-300 rounded px-3 py-2 text-sm sm:col-span-2"
 				/>
 				<div class="flex items-center gap-4 sm:col-span-4">
 					<label class="flex items-center gap-2 text-sm text-gray-700">
@@ -84,28 +84,32 @@
 						On-demand
 					</label>
 				</div>
-			<select
-				name="check_type"
-				bind:value={newCheckType}
-				class="border border-gray-300 rounded px-3 py-2 text-sm"
-			>
-				<option value="http">HTTP</option>
-				<option value="command">Command</option>
-			</select>
-			{#if newCheckType === 'command'}
-				<textarea
-					name="check_command"
-					placeholder="Shell command (exit 0 = up)"
-					rows="3"
-					class="border border-gray-300 rounded px-3 py-2 text-sm sm:col-span-4 font-mono resize-y"
-				></textarea>
-			{/if}
-				<button
-					type="submit"
-					class="bg-blue-600 hover:bg-blue-700 text-white rounded px-4 py-2 text-sm font-medium"
-				>
-					Add service
-				</button>
+				<div class="sm:col-span-4 space-y-2">
+					<select
+						name="check_type"
+						bind:value={newCheckType}
+						class="border border-gray-300 rounded px-3 py-2 text-sm"
+					>
+						<option value="http">HTTP</option>
+						<option value="command">Command</option>
+					</select>
+					{#if newCheckType === 'command'}
+						<textarea
+							name="check_command"
+							placeholder="Shell command (exit 0 = up)"
+							rows="3"
+							class="w-full border border-gray-300 rounded px-3 py-2 text-sm font-mono resize-y"
+						></textarea>
+					{/if}
+				</div>
+				<div class="sm:col-span-4 flex justify-end">
+					<button
+						type="submit"
+						class="bg-blue-600 hover:bg-blue-700 text-white rounded px-4 py-2 text-sm font-medium"
+					>
+						Add service
+					</button>
+				</div>
 			</form>
 
 			<!-- Service list -->
@@ -172,86 +176,86 @@
 										On-demand
 									</label>
 								</div>
-								<select
-									name="check_type"
-									bind:value={editingService.check_type}
-									class="border border-gray-300 rounded px-3 py-1.5 text-sm"
-								>
-									<option value="http">HTTP</option>
-									<option value="command">Command</option>
-								</select>
-								{#if editingService.check_type === 'command'}
-									<textarea
-										name="check_command"
-										rows="3"
-										class="border border-gray-300 rounded px-3 py-1.5 text-sm sm:col-span-4 font-mono resize-y"
-									>{editingService.check_command ?? ''}</textarea>
-								{/if}
-									<div class="flex gap-2">
-										<button
-											type="submit"
-											class="bg-blue-600 hover:bg-blue-700 text-white rounded px-3 py-1.5 text-sm"
-											>Save</button
-										>
-										<button
-											type="button"
-											onclick={() => (editingService = null)}
-											class="border border-gray-300 rounded px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50"
-											>Cancel</button
-										>
-									</div>
+								<div class="sm:col-span-4 space-y-2">
+									<select
+										name="check_type"
+										bind:value={editingService.check_type}
+										class="border border-gray-300 rounded px-3 py-1.5 text-sm"
+									>
+										<option value="http">HTTP</option>
+										<option value="command">Command</option>
+									</select>
+									{#if editingService.check_type === 'command'}
+										<textarea
+											name="check_command"
+											rows="3"
+											class="w-full border border-gray-300 rounded px-3 py-1.5 text-sm font-mono resize-y"
+										>{editingService.check_command ?? ''}</textarea>
+									{/if}
+								</div>
+								<div class="flex gap-2 sm:col-span-4">
+									<button
+										type="submit"
+										class="bg-blue-600 hover:bg-blue-700 text-white rounded px-3 py-1.5 text-sm"
+										>Save</button>
+									<button
+										type="button"
+										onclick={() => (editingService = null)}
+										class="border border-gray-300 rounded px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50"
+										>Cancel</button>
+								</div>
 								</form>
 							{:else}
-								<div class="flex items-center justify-between">
-								<div>
-									{#if service.site_url || (service.url ?? '').startsWith('https://')}
-										<a
-										href={service.site_url ?? service.url}
-											target="_blank"
-											rel="noopener noreferrer"
-											class="font-medium text-gray-900 hover:underline"
-										>{service.name}</a>
-									{:else}
-										<span class="font-medium text-gray-900">{service.name}</span>
-									{/if}
-									{#if service.description}
-										<p class="text-xs text-gray-500">{service.description}</p>
-									{/if}
-									{#if service.group}
-									<p class="text-xs text-gray-400 mt-0.5">Group: {service.group}</p>
-									{/if}
-							{#if service.site_url}
-								<p class="text-xs mt-0.5"><a href={service.site_url} target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">{service.site_url}</a></p>
-								{/if}
-									{#if service.last_checked_at}
-									<p class="text-xs text-gray-400">Last checked: {new Date(service.last_checked_at!).toLocaleTimeString()}</p>
-									{/if}
-					{#if !service.is_public}
-								<span class="inline-block text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 mt-0.5">Private</span>
-							{/if}
-					{#if !service.check_enabled}
-								<span class="inline-block text-xs px-1.5 py-0.5 rounded bg-yellow-50 text-yellow-700 mt-0.5">Checks off</span>
-							{/if}
-					{#if service.on_demand}
-								<span class="inline-block text-xs px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 mt-0.5">On-demand</span>
-							{/if}
-					{#if service.check_type === 'command'}
-							<span class="inline-block text-xs px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 mt-0.5">Command check</span>
-						{/if}
-								</div>
-									<div class="flex items-center gap-3">
+								<div class="flex items-start justify-between gap-4">
+									<div class="min-w-0 flex-1">
+										{#if service.site_url || (service.url ?? '').startsWith('https://')}
+											<a
+												href={service.site_url ?? service.url}
+												target="_blank"
+												rel="noopener noreferrer"
+												class="font-medium text-gray-900 hover:underline"
+											>{service.name}</a>
+										{:else}
+											<span class="font-medium text-gray-900">{service.name}</span>
+										{/if}
+										{#if service.description}
+											<p class="text-xs text-gray-500">{service.description}</p>
+										{/if}
+										{#if service.group}
+											<p class="text-xs text-gray-400 mt-0.5">Group: {service.group}</p>
+										{/if}
+										{#if service.url}
+											<p class="text-xs text-gray-400 mt-0.5 font-mono truncate">{service.url}</p>
+										{/if}
+										{#if service.last_checked_at}
+											<p class="text-xs text-gray-400 mt-0.5">Last checked: {new Date(service.last_checked_at).toLocaleTimeString()}</p>
+										{/if}
+										<div class="flex flex-wrap gap-1 mt-1">
+											{#if !service.is_public}
+												<span class="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">Private</span>
+											{/if}
+											{#if !service.check_enabled}
+												<span class="text-xs px-1.5 py-0.5 rounded bg-yellow-50 text-yellow-700">Checks off</span>
+											{/if}
+											{#if service.on_demand}
+												<span class="text-xs px-1.5 py-0.5 rounded bg-blue-50 text-blue-600">On-demand</span>
+											{/if}
+											{#if service.check_type === 'command'}
+												<span class="text-xs px-1.5 py-0.5 rounded bg-purple-50 text-purple-700">Command check</span>
+											{/if}
+										</div>
+									</div>
+									<div class="flex items-center gap-3 shrink-0">
 										<span class="text-sm {STATUS_COLOR[service.status]}">{service.status}</span>
 										<button
 											onclick={() => (editingService = { ...service })}
-											class="text-xs text-blue-600 hover:underline">Edit</button
-										>
+											class="text-xs text-blue-600 hover:underline">Edit</button>
 										<form method="POST" action="?/deleteService" use:enhance>
 											<input type="hidden" name="id" value={service.id} />
 											<button
 												type="submit"
 												onclick={(e) => { if (!confirm('Delete this service?')) e.preventDefault(); }}
-												class="text-xs text-red-500 hover:underline">Delete</button
-											>
+												class="text-xs text-red-500 hover:underline">Delete</button>
 										</form>
 									</div>
 								</div>
@@ -383,4 +387,97 @@
 				</div>
 			{/if}
 	</section>
+
+		<!-- ── Notifications ────────────────────────────────────────── -->
+		<section>
+			<h2 class="text-lg font-semibold text-gray-800 mb-4">Notifications</h2>
+			<div class="space-y-8">
+
+				<!-- Email Subscribers -->
+				<div class="bg-white rounded-lg border border-gray-200 p-4">
+					<h3 class="text-base font-medium text-gray-700 mb-3">Email Subscribers</h3>
+					<form method="POST" action="?/addEmailSubscriber" use:enhance class="flex gap-2 mb-4">
+						<input name="email" type="email" required placeholder="email@example.com" class="border border-gray-300 rounded px-3 py-2 text-sm flex-1" />
+						<button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white rounded px-4 py-2 text-sm font-medium">Add</button>
+					</form>
+					{#if data.emailSubscribers.length === 0}
+						<p class="text-gray-400 text-sm">None configured.</p>
+					{:else}
+						<ul class="divide-y divide-gray-100">
+							{#each data.emailSubscribers as sub (sub.id)}
+								<li class="flex items-center justify-between py-2">
+									<span class="text-sm text-gray-800">{sub.email}</span>
+									<form method="POST" action="?/deleteEmailSubscriber" use:enhance>
+										<input type="hidden" name="id" value={sub.id} />
+										<button type="submit" class="text-xs text-red-500 hover:underline">Delete</button>
+									</form>
+								</li>
+							{/each}
+						</ul>
+					{/if}
+				</div>
+
+				<!-- Telegram -->
+				<div class="bg-white rounded-lg border border-gray-200 p-4">
+					<h3 class="text-base font-medium text-gray-700 mb-3">Telegram</h3>
+					<form method="POST" action="?/saveTelegram" use:enhance class="flex flex-col gap-3">
+						<div class="flex items-center gap-2">
+							<input type="password" name="bot_token" placeholder="Bot token (leave blank to keep)" class="border border-gray-300 rounded px-3 py-2 text-sm flex-1" />
+							{#if data.notifSettings.telegram.bot_token_set}
+								<span class="text-xs text-gray-500">(configured)</span>
+							{/if}
+						</div>
+						<input name="chat_id" placeholder="Chat ID" value={data.notifSettings.telegram.chat_id ?? ''} class="border border-gray-300 rounded px-3 py-2 text-sm" />
+						<div class="flex justify-end">
+							<button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white rounded px-4 py-2 text-sm font-medium">Save</button>
+						</div>
+					</form>
+				</div>
+
+				<!-- Discord -->
+				<div class="bg-white rounded-lg border border-gray-200 p-4">
+					<h3 class="text-base font-medium text-gray-700 mb-3">Discord</h3>
+					<form method="POST" action="?/saveDiscord" use:enhance class="flex flex-col gap-3 mb-6">
+						<div class="flex items-center gap-2">
+							<input type="password" name="bot_token" placeholder="Bot token (leave blank to keep)" class="border border-gray-300 rounded px-3 py-2 text-sm flex-1" />
+							{#if data.notifSettings.discord.bot_token_set}
+								<span class="text-xs text-gray-500">(configured)</span>
+							{/if}
+						</div>
+						<div class="flex justify-end">
+							<button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white rounded px-4 py-2 text-sm font-medium">Save</button>
+						</div>
+					</form>
+					<h4 class="text-sm font-medium text-gray-700 mb-2">Destinations</h4>
+					<form method="POST" action="?/addDiscordDestination" use:enhance class="flex flex-wrap gap-2 mb-4">
+						<select name="destination_type" class="border border-gray-300 rounded px-3 py-2 text-sm">
+							<option value="channel">channel</option>
+							<option value="user">user</option>
+						</select>
+						<input name="destination_id" required placeholder="Channel or User ID" class="border border-gray-300 rounded px-3 py-2 text-sm flex-1" />
+						<input name="label" placeholder="Label (optional)" class="border border-gray-300 rounded px-3 py-2 text-sm" />
+						<button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white rounded px-4 py-2 text-sm font-medium">Add</button>
+					</form>
+					{#if data.discordDestinations.length === 0}
+						<p class="text-gray-400 text-sm">None configured.</p>
+					{:else}
+						<ul class="divide-y divide-gray-100">
+							{#each data.discordDestinations as dest (dest.id)}
+								<li class="flex items-center justify-between py-2">
+									<div class="flex items-center gap-2">
+										<span class="text-sm text-gray-800">{dest.label ?? dest.destination_id}</span>
+										<span class="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">{dest.destination_type}</span>
+									</div>
+									<form method="POST" action="?/deleteDiscordDestination" use:enhance>
+										<input type="hidden" name="id" value={dest.id} />
+										<button type="submit" class="text-xs text-red-500 hover:underline">Delete</button>
+									</form>
+								</li>
+							{/each}
+						</ul>
+					{/if}
+				</div>
+
+			</div>
+		</section>
 </main>

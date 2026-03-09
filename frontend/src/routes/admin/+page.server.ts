@@ -3,13 +3,19 @@ import { fail } from '@sveltejs/kit';
 import type { Service, Incident } from '$lib/types';
 
 export const load: PageServerLoad = async ({ fetch }) => {
-	const [servicesRes, incidentsRes] = await Promise.all([
+	const [servicesRes, incidentsRes, notifSettingsRes, emailSubsRes, discordDestsRes] = await Promise.all([
 		fetch('/api/services?include_private=true'),
-		fetch('/api/incidents')
+		fetch('/api/incidents'),
+		fetch('/api/notifications/settings'),
+		fetch('/api/notifications/email-subscribers'),
+		fetch('/api/notifications/discord/destinations')
 	]);
 	return {
 		services: (await servicesRes.json()) as Service[],
-		incidents: (await incidentsRes.json()) as Incident[]
+		incidents: (await incidentsRes.json()) as Incident[],
+		notifSettings: await notifSettingsRes.json(),
+		emailSubscribers: await emailSubsRes.json(),
+		discordDestinations: await discordDestsRes.json()
 	};
 };
 
@@ -94,5 +100,52 @@ export const actions: Actions = {
 		const data = await request.formData();
 		const id = data.get('id') as string;
 		return apiFetch(fetch, 'DELETE', `/api/incidents/${id}`);
+	},
+
+	saveTelegram: async ({ fetch, request }) => {
+		const data = await request.formData();
+		const bot_token = data.get('bot_token');
+		const tokenVal = bot_token && bot_token.toString().trim() ? bot_token : null;
+		return apiFetch(fetch, 'PUT', '/api/notifications/telegram', {
+			bot_token: tokenVal,
+			chat_id: data.get('chat_id') || null
+		});
+	},
+
+	saveDiscord: async ({ fetch, request }) => {
+		const data = await request.formData();
+		const bot_token = data.get('bot_token');
+		const tokenVal = bot_token && bot_token.toString().trim() ? bot_token : null;
+		return apiFetch(fetch, 'PUT', '/api/notifications/discord', {
+			bot_token: tokenVal
+		});
+	},
+
+	addEmailSubscriber: async ({ fetch, request }) => {
+		const data = await request.formData();
+		return apiFetch(fetch, 'POST', '/api/notifications/email-subscribers', {
+			email: data.get('email')
+		});
+	},
+
+	deleteEmailSubscriber: async ({ fetch, request }) => {
+		const data = await request.formData();
+		const id = data.get('id') as string;
+		return apiFetch(fetch, 'DELETE', `/api/notifications/email-subscribers/${id}`);
+	},
+
+	addDiscordDestination: async ({ fetch, request }) => {
+		const data = await request.formData();
+		return apiFetch(fetch, 'POST', '/api/notifications/discord/destinations', {
+			destination_type: data.get('destination_type'),
+			destination_id: data.get('destination_id'),
+			label: data.get('label') || null
+		});
+	},
+
+	deleteDiscordDestination: async ({ fetch, request }) => {
+		const data = await request.formData();
+		const id = data.get('id') as string;
+		return apiFetch(fetch, 'DELETE', `/api/notifications/discord/destinations/${id}`);
 	}
 };
