@@ -1,4 +1,5 @@
 import asyncio
+import datetime
 import logging
 import smtplib
 from email.mime.text import MIMEText
@@ -166,15 +167,26 @@ async def notify(subject: str, body: str = "") -> None:
             _log.error("notification dispatch error: %s", r)
 
 
-async def notify_status_change(service_name: str, old_status: str, new_status: str) -> None:
-    """Called by the health checker when a service's status changes."""
-    if old_status == new_status:
+async def notify_status_changes(
+    changes: list[tuple[str, str, str, str | None, str]],
+) -> None:
+    """Called by the health checker with all status changes from one check cycle."""
+    if not changes:
         return
-    if new_status == "operational":
-        subject = f"[StatusPage] {service_name} recovered ({old_status} -> operational)"
-    else:
-        subject = f"[StatusPage] {service_name}: {old_status} -> {new_status}"
-    await notify(subject, body=_cfg.BASE_URL)
+    now = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+    count = len(changes)
+    subject = f"[StatusPage] {count} service{'s' if count != 1 else ''} changed status"
+    lines = []
+    for svc_name, old_st, new_st, url, detail in changes:
+        icon = "✅" if new_st == "operational" else "🔴"
+        line = f"{icon} {svc_name}: {old_st} -> {new_st}"
+        if url:
+            line += f"\n   URL: {url}"
+        if detail:
+            line += f"\n   Detail: {detail}"
+        lines.append(line)
+    body = f"Time: {now}\n\n" + "\n\n".join(lines)
+    await notify(subject, body)
 
 async def notify_incident(action: str, title: str, status: str, body: str) -> None:
     """Called when an incident is created or updated."""

@@ -16,22 +16,22 @@ _FAILURE_THRESHOLD = 2        # consecutive outage results before status transit
 _failure_counts: dict = {}    # service_id -> consecutive outage count (in-memory, reset on restart)
 
 
-async def _check_http(client: httpx.AsyncClient, name: str, url: str) -> str:
+async def _check_http(client: httpx.AsyncClient, name: str, url: str) -> tuple[str, str]:
     """HTTP GET — operational if status < 500, outage otherwise."""
     try:
         resp = await client.get(url)
         if resp.status_code >= 500:
-            return ServiceStatus.outage
-        return ServiceStatus.operational
+            return ServiceStatus.outage, f"HTTP {resp.status_code}"
+        return ServiceStatus.operational, f"HTTP {resp.status_code}"
     except (httpx.ConnectError, httpx.TimeoutException, httpx.TransportError) as exc:
         _log.warning("check %s failed: %s: %s", name, type(exc).__name__, exc)
-        return ServiceStatus.outage
+        return ServiceStatus.outage, f"{type(exc).__name__}: {exc}"
     except Exception as exc:  # noqa: BLE001
         _log.warning("unexpected error checking %s: %s", name, exc)
-        return ServiceStatus.outage
+        return ServiceStatus.outage, f"{type(exc).__name__}: {exc}"
 
 
-async def _check_command(name: str, command: str) -> str:
+async def _check_command(name: str, command: str) -> tuple[str, str]:
     """Shell command — operational if exit 0, outage otherwise."""
     try:
         proc = await asyncio.create_subprocess_shell(
@@ -45,16 +45,16 @@ async def _check_command(name: str, command: str) -> str:
             proc.kill()
             await proc.communicate()
             _log.warning("check %s: command timed out after %.0fs", name, _COMMAND_TIMEOUT)
-            return ServiceStatus.outage
+            return ServiceStatus.outage, f"timed out after {_COMMAND_TIMEOUT:.0f}s"
 
         if proc.returncode == 0:
-            return ServiceStatus.operational
+            return ServiceStatus.operational, "exit 0"
         stderr_text = (stderr or b"").decode(errors="replace").strip()
         _log.warning("check %s: command exited %d: %s", name, proc.returncode, stderr_text)
-        return ServiceStatus.outage
+        return ServiceStatus.outage, f"exit {proc.returncode}: {stderr_text}"
     except Exception as exc:  # noqa: BLE001
         _log.warning("check %s: command error: %s", name, exc)
-        return ServiceStatus.outage
+        return ServiceStatus.outage, f"{type(exc).__name__}: {exc}"
 
 
 async def _warmup_single(name: str, command: str) -> None:
@@ -135,7 +135,7 @@ async def run_checks(db_engine) -> None:
     timeout=httpx.Timeout(5.0),
         follow_redirects=True,
     ) as client:
-        async def _dispatch(name: str, url: str | None, check_type: str, cmd: str | None) -> str:
+        async def _dispatch(name: str, url: str | None, check_type: str, cmd: str | None) -> tuple[str, str]:
             if check_type == CheckType.command:
                 return await _check_command(name, cmd)
             return await _check_http(client, name, url)
@@ -147,17 +147,18 @@ async def run_checks(db_engine) -> None:
 
     # Phase 3: write results; acquire connection only now.
     now = datetime.datetime.utcnow()
-    status_changes: list[tuple[str, str, str]] = []
+    status_changes: list[tuple[str, str, str, str | None, str]] = []
     with Session(db_engine) as session:
-        for (svc_id, svc_name, _, prior_status, on_demand, _ct, _cmd), result in zip(targets, results):
+        for (svc_id, svc_name, svc_url, prior_status, on_demand, _ct, _cmd), result in zip(targets, results):
             svc = session.get(Service, svc_id)
             if svc is None:
                 continue
             if isinstance(result, Exception):
                 _log.error("check task for %s raised: %s", svc_name, result)
                 new_status = ServiceStatus.outage
+                detail = f"check task raised: {result}"
             else:
-                new_status = result
+                new_status, detail = result
             # Consecutive-failure guard: suppress outage/offline transitions until
             # _FAILURE_THRESHOLD checks in a row return outage.  Single-cycle
             # network blips therefore produce no alert.  Recoveries are immediate.
@@ -177,7 +178,7 @@ async def run_checks(db_engine) -> None:
                 new_status = ServiceStatus.offline
             if new_status != prior_status:
                 _log.info("status change: %s %s -> %s", svc_name, prior_status.value, new_status.value)
-                status_changes.append((svc_name, prior_status.value, new_status.value))
+                status_changes.append((svc_name, prior_status.value, new_status.value, svc_url, detail))
                 session.add(ServiceStatusHistory(
                     service_id=svc_id,
                     status=new_status,
@@ -191,8 +192,7 @@ async def run_checks(db_engine) -> None:
     # Fire notifications after the commit so DB is consistent if they fail.
     if status_changes:
         from statuspage import notifier as _notifier
-        for svc_name, old_st, new_st in status_changes:
-            asyncio.create_task(_notifier.notify_status_change(svc_name, old_st, new_st))
+        asyncio.create_task(_notifier.notify_status_changes(status_changes))
 
 
 async def health_check_loop(db_engine, interval_seconds: int) -> None:
