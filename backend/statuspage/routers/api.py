@@ -174,24 +174,51 @@ def _compute_daily_history(
 
     For each day: worst status of all events that started that day, carry-forward
     the last known status when no event occurred, 'no_data' if no history at all.
+    Outage events that lasted ≤60 s and are not currently ongoing are suppressed
+    to avoid red dots from transient blips.
     """
     _PRIORITY = {"outage": 3, "degraded": 2, "operational": 1, "offline": 0}
+    _OUTAGE_MIN_SECONDS = 60
     today = now.date()
     rows_sorted = sorted(rows, key=lambda r: r.started_at)
+
+    # Precompute effective status for each row: short non-ongoing outage rows
+    # are replaced with whatever non-outage status preceded them.
+    effective: list[str] = []
+    for i, row in enumerate(rows_sorted):
+        raw = row.status.value
+        if raw != "outage":
+            effective.append(raw)
+            continue
+        if i == len(rows_sorted) - 1:
+            effective.append("outage")  # ongoing — always visible
+            continue
+        duration_s = (rows_sorted[i + 1].started_at - row.started_at).total_seconds()
+        if duration_s > _OUTAGE_MIN_SECONDS:
+            effective.append("outage")
+        else:
+            # Short blip: fall back to the last non-outage effective status.
+            prior = next(
+                (effective[j] for j in range(i - 1, -1, -1) if effective[j] != "outage"),
+                "operational",
+            )
+            effective.append(prior)
+
     result = []
     for i in range(days - 1, -1, -1):
         day = today - datetime.timedelta(days=i)
         day_start = datetime.datetime(day.year, day.month, day.day)
         day_end = day_start + datetime.timedelta(days=1)
-        in_day = [r for r in rows_sorted if day_start <= r.started_at < day_end]
-        before_day = [r for r in rows_sorted if r.started_at < day_start]
+        in_day = [j for j, r in enumerate(rows_sorted) if day_start <= r.started_at < day_end]
+        before_day = [j for j, r in enumerate(rows_sorted) if r.started_at < day_start]
         if not in_day and not before_day:
             status = "no_data"
         elif not in_day:
-            status = before_day[-1].status.value
+            status = effective[before_day[-1]]
         else:
             candidates = in_day + (before_day[-1:] if before_day else [])
-            status = max(candidates, key=lambda r: _PRIORITY.get(r.status.value, -1)).status.value
+            best_j = max(candidates, key=lambda j: _PRIORITY.get(effective[j], -1))
+            status = effective[best_j]
         result.append({"date": day.isoformat(), "status": status})
     return result
 
