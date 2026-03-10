@@ -3,6 +3,7 @@ import datetime
 import logging
 import smtplib
 from email.mime.text import MIMEText
+from urllib.parse import urlparse
 
 import httpx
 from sqlalchemy.orm import Session
@@ -173,22 +174,24 @@ async def notify_status_changes(
     """Called by the health checker with all status changes from one check cycle."""
     if not changes:
         return
+    instance = urlparse(_cfg.BASE_URL).netloc or _cfg.BASE_URL
     now = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
     count = len(changes)
-    subject = f"[StatusPage] {count} service{'s' if count != 1 else ''} changed status"
+    subject = f"[StatusPage @ {instance}] {count} service{'s' if count != 1 else ''} changed status"
     lines = []
     for svc_name, old_st, new_st, url, detail in changes:
-        icon = "✅" if new_st == "operational" else "🔴"
+        icon = "\u2705" if new_st == "operational" else "\U0001f534"
         line = f"{icon} {svc_name}: {old_st} -> {new_st}"
         if url:
             line += f"\n   URL: {url}"
         if detail:
             line += f"\n   Detail: {detail}"
         lines.append(line)
-    body = f"Time: {now}\n\n" + "\n\n".join(lines)
+    body = f"Instance: {_cfg.BASE_URL}\nTime: {now}\n\n" + "\n\n".join(lines)
     await notify(subject, body)
 
 async def notify_incident(action: str, title: str, status: str, body: str) -> None:
     """Called when an incident is created or updated."""
-    subject = f"[StatusPage] Incident {action}: {title} [{status}]"
+    instance = urlparse(_cfg.BASE_URL).netloc or _cfg.BASE_URL
+    subject = f"[StatusPage @ {instance}] Incident {action}: {title} [{status}]"
     await notify(subject, body)
