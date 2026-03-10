@@ -2,7 +2,7 @@ import datetime
 import enum
 import uuid
 
-from sqlalchemy import Boolean, Column, DateTime, Enum, Index, String, Text
+from sqlalchemy import Boolean, Column, DateTime, Enum, Index, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase
 
 
@@ -55,6 +55,7 @@ class Service(Base):
         Enum(CheckType), default=CheckType.http, nullable=False
     )
     check_command = Column(Text, nullable=True)
+    failure_threshold = Column(Integer, default=2, nullable=False, server_default="2")
 
 
 class Incident(Base):

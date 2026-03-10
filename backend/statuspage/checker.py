@@ -12,7 +12,6 @@ _log = logging.getLogger(__name__)
 
 _COMMAND_TIMEOUT = 45.0   # seconds; relay SSH needs auth + relay setup time
 _WARMUP_TIMEOUT  = 300.0  # seconds; one-time init (nix store population, etc.)
-_FAILURE_THRESHOLD = 2        # consecutive outage results before status transitions
 _failure_counts: dict = {}    # service_id -> consecutive outage count (in-memory, reset on restart)
 
 
@@ -160,14 +159,14 @@ async def run_checks(db_engine) -> None:
             else:
                 new_status, detail = result
             # Consecutive-failure guard: suppress outage/offline transitions until
-            # _FAILURE_THRESHOLD checks in a row return outage.  Single-cycle
+            # consecutive failures == svc.failure_threshold before status transitions.  Single-cycle
             # network blips therefore produce no alert.  Recoveries are immediate.
             if new_status == ServiceStatus.outage:
                 _failure_counts[svc_id] = _failure_counts.get(svc_id, 0) + 1
-                if _failure_counts[svc_id] < _FAILURE_THRESHOLD:
+                if _failure_counts[svc_id] < svc.failure_threshold:
                     _log.debug(
                         "check %s: failure %d/%d — holding at %s",
-                        svc_name, _failure_counts[svc_id], _FAILURE_THRESHOLD, prior_status.value,
+                        svc_name, _failure_counts[svc_id], svc.failure_threshold, prior_status.value,
                     )
                     new_status = prior_status
             else:

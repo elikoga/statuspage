@@ -62,6 +62,7 @@ class ServiceCreate(BaseModel):
     on_demand: bool = False
     check_type: CheckType = CheckType.http
     check_command: str | None = None
+    failure_threshold: int = 2
 
 
 class ServiceUpdate(BaseModel):
@@ -76,6 +77,7 @@ class ServiceUpdate(BaseModel):
     on_demand: bool | None = None
     check_type: CheckType | None = None
     check_command: str | None = None
+    failure_threshold: int | None = None
 
 
 class ServiceOut(_UTCModel):
@@ -94,6 +96,7 @@ class ServiceOut(_UTCModel):
     last_checked_at: datetime.datetime | None
     check_type: CheckType
     check_command: str | None
+    failure_threshold: int
 
 
 @router.get("/services", response_model=list[ServiceOut])
@@ -124,6 +127,7 @@ def create_service(body: ServiceCreate, db: Session = Depends(get_db), _user: st
         on_demand=body.on_demand,
         check_type=body.check_type,
         check_command=body.check_command,
+        failure_threshold=body.failure_threshold,
         created_at=_now(),
         updated_at=_now(),
     )
@@ -145,7 +149,7 @@ def update_service(
     service_id: str, body: ServiceUpdate, db: Session = Depends(get_db), _user: str = Depends(require_auth)
 ):
     service = _get_or_404(db, Service, service_id, "Service not found")
-    _non_nullable = {'name', 'status', 'check_enabled', 'is_public', 'on_demand', 'check_type'}
+    _non_nullable = {'name', 'status', 'check_enabled', 'is_public', 'on_demand', 'check_type', 'failure_threshold'}
     for field in body.model_fields_set:
         value = getattr(body, field)
         if value is None and field in _non_nullable:

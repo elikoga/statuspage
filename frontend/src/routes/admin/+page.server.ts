@@ -49,7 +49,8 @@ export const actions: Actions = {
 			check_enabled: data.get('check_enabled') === 'true',
 			on_demand: data.get('on_demand') === 'true',
 			check_type: data.get('check_type') || 'http',
-			check_command: data.get('check_command') || null
+			check_command: data.get('check_command') || null,
+			failure_threshold: Number(data.get('failure_threshold')) || 2
 		});
 	},
 
@@ -67,7 +68,8 @@ export const actions: Actions = {
 			check_enabled: data.get('check_enabled') === 'true',
 			on_demand: data.get('on_demand') === 'true',
 			check_type: data.get('check_type') || undefined,
-			check_command: data.get('check_command') || null
+			check_command: data.get('check_command') || null,
+			failure_threshold: Number(data.get('failure_threshold')) || undefined
 		});
 	},
 

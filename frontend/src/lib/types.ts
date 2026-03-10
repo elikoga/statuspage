@@ -16,6 +16,7 @@ export interface Service {
   on_demand: boolean;
   check_type: string;
   check_command?: string | null;
+  failure_threshold: number;
   last_checked_at?: string | null;
   created_at: string;
   updated_at: string;

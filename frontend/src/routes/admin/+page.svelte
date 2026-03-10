@@ -83,6 +83,16 @@
 						<input type="checkbox" name="on_demand" value="true" class="rounded" />
 						On-demand
 					</label>
+				<label class="flex items-center gap-2 text-sm text-gray-700 sm:col-span-2">
+					Failure threshold
+					<input
+						type="number"
+						name="failure_threshold"
+						value="2"
+						min="1"
+						class="border border-gray-300 rounded px-3 py-2 text-sm w-20"
+					/>
+				</label>
 				</div>
 				<div class="sm:col-span-4 space-y-2">
 					<select
@@ -175,6 +185,16 @@
 										<input type="checkbox" name="on_demand" value="true" checked={editingService.on_demand === true} class="rounded" />
 										On-demand
 									</label>
+						<label class="flex items-center gap-2 text-sm text-gray-700 sm:col-span-2">
+							Failure threshold
+							<input
+								type="number"
+								name="failure_threshold"
+								value={editingService.failure_threshold ?? 2}
+								min="1"
+								class="border border-gray-300 rounded px-3 py-1.5 text-sm w-20"
+							/>
+						</label>
 								</div>
 								<div class="sm:col-span-4 space-y-2">
 									<select
