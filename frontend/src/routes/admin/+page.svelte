@@ -80,8 +80,8 @@
 						Health check
 					</label>
 					<label class="flex items-center gap-2 text-sm text-gray-700">
-						<input type="checkbox" name="on_demand" value="true" class="rounded" />
-						On-demand
+						<input type="checkbox" name="muted" value="true" class="rounded" />
+						Muted
 					</label>
 				<label class="flex items-center gap-2 text-sm text-gray-700 sm:col-span-2">
 					Failure threshold
@@ -182,8 +182,8 @@
 										Health check
 									</label>
 									<label class="flex items-center gap-2 text-sm text-gray-700">
-										<input type="checkbox" name="on_demand" value="true" checked={editingService.on_demand === true} class="rounded" />
-										On-demand
+									<input type="checkbox" name="muted" value="true" checked={editingService.muted === true} class="rounded" />
+									Muted
 									</label>
 						<label class="flex items-center gap-2 text-sm text-gray-700 sm:col-span-2">
 							Failure threshold
@@ -257,8 +257,8 @@
 											{#if !service.check_enabled}
 												<span class="text-xs px-1.5 py-0.5 rounded bg-yellow-50 text-yellow-700">Checks off</span>
 											{/if}
-											{#if service.on_demand}
-												<span class="text-xs px-1.5 py-0.5 rounded bg-blue-50 text-blue-600">On-demand</span>
+									{#if service.muted}
+										<span class="text-xs px-1.5 py-0.5 rounded bg-blue-50 text-blue-600">Muted</span>
 											{/if}
 											{#if service.check_type === 'command'}
 												<span class="text-xs px-1.5 py-0.5 rounded bg-purple-50 text-purple-700">Command check</span>

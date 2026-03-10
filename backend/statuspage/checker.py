@@ -108,7 +108,7 @@ async def run_checks(db_engine) -> None:
                 Service.name,
                 Service.url,
                 Service.status,
-                Service.on_demand,
+                Service.muted,
                 Service.check_type,
                 Service.check_command,
             )
@@ -125,7 +125,7 @@ async def run_checks(db_engine) -> None:
         return
 
     targets = [
-        (row.id, row.name, row.url, row.status, row.on_demand, row.check_type, row.check_command)
+        (row.id, row.name, row.url, row.status, row.muted, row.check_type, row.check_command)
         for row in rows
     ]
 
@@ -148,7 +148,7 @@ async def run_checks(db_engine) -> None:
     now = datetime.datetime.utcnow()
     status_changes: list[tuple[str, str, str, str | None, str]] = []
     with Session(db_engine) as session:
-        for (svc_id, svc_name, svc_url, prior_status, on_demand, _ct, _cmd), result in zip(targets, results):
+        for (svc_id, svc_name, svc_url, prior_status, muted, _ct, _cmd), result in zip(targets, results):
             svc = session.get(Service, svc_id)
             if svc is None:
                 continue
@@ -171,18 +171,21 @@ async def run_checks(db_engine) -> None:
                     new_status = prior_status
             else:
                 _failure_counts.pop(svc_id, None)
-            # on_demand services never show outage — downtime is expected.
-            # Non-on_demand services also keep offline if already set manually.
-            if new_status == ServiceStatus.outage and (on_demand or prior_status == ServiceStatus.offline):
+            # muted services never show outage — downtime is expected.
+            # Non-muted services also keep offline if already set manually.
+            # muted status changes update the DB for the timeline display
+            # but never trigger notifications.
+            if new_status == ServiceStatus.outage and (muted or prior_status == ServiceStatus.offline):
                 new_status = ServiceStatus.offline
             if new_status != prior_status:
                 _log.info("status change: %s %s -> %s", svc_name, prior_status.value, new_status.value)
-                status_changes.append((svc_name, prior_status.value, new_status.value, svc_url, detail))
                 session.add(ServiceStatusHistory(
                     service_id=svc_id,
                     status=new_status,
                     started_at=now,
                 ))
+                if not muted:
+                    status_changes.append((svc_name, prior_status.value, new_status.value, svc_url, detail))
             svc.status = new_status
             svc.last_checked_at = now
         session.commit()

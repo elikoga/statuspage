@@ -13,7 +13,7 @@ export interface Service {
   group?: string | null;
   is_public: boolean;
   check_enabled: boolean;
-  on_demand: boolean;
+  muted: boolean;
   check_type: string;
   check_command?: string | null;
   failure_threshold: number;

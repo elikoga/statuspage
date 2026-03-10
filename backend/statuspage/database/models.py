@@ -50,7 +50,7 @@ class Service(Base):
     check_enabled = Column(Boolean, default=True, nullable=False)
     last_checked_at = Column(DateTime, nullable=True)
     is_public = Column(Boolean, default=True, nullable=False)
-    on_demand = Column(Boolean, default=False, nullable=False)
+    muted = Column(Boolean, default=False, nullable=False)
     check_type = Column(
         Enum(CheckType), default=CheckType.http, nullable=False
     )

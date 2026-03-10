@@ -47,7 +47,7 @@ export const actions: Actions = {
 			status: data.get('status') || 'operational',
 			is_public: data.get('is_public') === 'true',
 			check_enabled: data.get('check_enabled') === 'true',
-			on_demand: data.get('on_demand') === 'true',
+			muted: data.get('muted') === 'true',
 			check_type: data.get('check_type') || 'http',
 			check_command: data.get('check_command') || null,
 			failure_threshold: Number(data.get('failure_threshold')) || 2
@@ -66,7 +66,7 @@ export const actions: Actions = {
 			status: data.get('status') || undefined,
 			is_public: data.get('is_public') === 'true',
 			check_enabled: data.get('check_enabled') === 'true',
-			on_demand: data.get('on_demand') === 'true',
+			muted: data.get('muted') === 'true',
 			check_type: data.get('check_type') || undefined,
 			check_command: data.get('check_command') || null,
 			failure_threshold: Number(data.get('failure_threshold')) || undefined
