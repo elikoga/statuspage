@@ -99,7 +99,19 @@ class ServiceOut(_UTCModel):
     failure_threshold: int
 
 
-@router.get("/services", response_model=list[ServiceOut])
+
+class ServicePublicOut(_UTCModel):
+    id: str
+    name: str
+    description: str | None
+    site_url: str | None
+    status: ServiceStatus
+    created_at: datetime.datetime
+    updated_at: datetime.datetime
+    group: str | None
+    last_checked_at: datetime.datetime | None
+
+@router.get("/services")
 def list_services(
     db: Session = Depends(get_db),
     session_token: str | None = Cookie(default=None, alias="session-token"),
@@ -108,8 +120,14 @@ def list_services(
     if include_private:
         if not session_token or not _auth.get_session(session_token):
             raise HTTPException(status_code=401, detail="Not authenticated")
-        return db.query(Service).order_by(Service.created_at).all()
-    return db.query(Service).filter(Service.is_public.is_(True)).order_by(Service.created_at).all()
+        return [
+            ServiceOut.model_validate(s)
+            for s in db.query(Service).order_by(Service.created_at).all()
+        ]
+    return [
+        ServicePublicOut.model_validate(s)
+        for s in db.query(Service).filter(Service.is_public.is_(True)).order_by(Service.created_at).all()
+    ]
 
 
 @router.post("/services", response_model=ServiceOut, status_code=201)
@@ -140,7 +158,7 @@ def create_service(body: ServiceCreate, db: Session = Depends(get_db), _user: st
 
 
 @router.get("/services/{service_id}", response_model=ServiceOut)
-def get_service(service_id: str, db: Session = Depends(get_db)):
+def get_service(service_id: str, db: Session = Depends(get_db), _user: str = Depends(require_auth)):
     return _get_or_404(db, Service, service_id, "Service not found")
 
 

@@ -1,12 +1,12 @@
 <script lang="ts">
-	import type { Service, Incident, DayStatus } from '$lib/types';
+	import type { Service, ServicePublic, Incident, DayStatus } from '$lib/types';
 	let {
 		services,
 		incidents,
 		history,
 		isPrivate = false
 	}: {
-		services: Service[];
+		services: ServicePublic[];
 		incidents: Incident[];
 		history: Record<string, DayStatus[]>;
 		isPrivate?: boolean;
@@ -66,7 +66,7 @@
 	});
 
 	const serviceGroups = $derived.by(() => {
-		const groups = new Map<string, Service[]>();
+		const groups = new Map<string, ServicePublic[]>();
 		for (const svc of services) {
 			const g = svc.group ?? 'Other';
 			if (!groups.has(g)) groups.set(g, []);
@@ -74,6 +74,19 @@
 		}
 		return groups;
 	});
+
+	// url is only present on Service (authenticated view). Safe because
+	// unauthenticated callers only have site_url from ServicePublicOut.
+	function serviceUrl(s: ServicePublic): string | null | undefined {
+		return (s as Service).url;
+	}
+
+	// is_public is only present on Service. Runtime invariant: isPrivate=true
+	// implies data came from the authenticated endpoint (ServiceOut), so the
+	// field is always populated when this is called.
+	function isServicePrivate(s: ServicePublic): boolean {
+		return 'is_public' in s && (s as Service).is_public === false;
+	}
 </script>
 
 <div class="min-h-screen bg-gray-50">
@@ -153,9 +166,9 @@
 								{#each groupServices as service (service.id)}
 									<div class="flex items-start justify-between px-4 py-3">
 										<div class="min-w-0 flex-1">
-											{#if service.site_url || (service.url ?? '').startsWith('https://')}
+								{#if service.site_url || (serviceUrl(service) ?? '').startsWith('https://')}
 												<a
-													href={service.site_url ?? service.url}
+										href={service.site_url ?? serviceUrl(service)}
 													target="_blank"
 													rel="noopener noreferrer"
 													class="font-medium text-gray-900 hover:underline"
@@ -163,7 +176,7 @@
 											{:else}
 												<span class="font-medium text-gray-900">{service.name}</span>
 											{/if}
-											{#if isPrivate && !service.is_public}
+								{#if isPrivate && isServicePrivate(service)}
 												<span class="ml-1.5 inline-block text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">Private</span>
 											{/if}
 											{#if service.description}
