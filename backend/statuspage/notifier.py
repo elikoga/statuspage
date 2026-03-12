@@ -1,5 +1,6 @@
 import asyncio
 import datetime
+import html
 import logging
 import smtplib
 from email.mime.text import MIMEText
@@ -15,6 +16,8 @@ _log = logging.getLogger(__name__)
 # Set by main.py at startup — same pattern as db_engine
 _db_engine = None
 
+
+_DISCORD_MAX_LEN = 2000
 
 # ── low-level transports ───────────────────────────────────────────────────────
 
@@ -137,11 +140,15 @@ async def notify(subject: str, body: str = "") -> None:
     coros = []
 
     if tg_token and tg_chat:
-        text = f"<b>{subject}</b>\n\n{body}".strip() if body else f"<b>{subject}</b>"
+        safe_subject = html.escape(subject)
+        safe_body = html.escape(body)
+        text = f"<b>{safe_subject}</b>\n\n{safe_body}".strip() if safe_body else f"<b>{safe_subject}</b>"
         coros.append(_telegram(tg_token, tg_chat, text))
 
     if dc_token and dests:
         text = f"**{subject}**\n{body}".strip() if body else f"**{subject}**"
+        if len(text) > _DISCORD_MAX_LEN:
+            text = text[:_DISCORD_MAX_LEN - 3] + "..."
         for dest_type, dest_id in dests:
             if dest_type == "channel":
                 coros.append(_discord_send(dc_token, dest_id, text))

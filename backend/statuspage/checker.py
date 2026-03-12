@@ -49,6 +49,9 @@ async def _check_command(name: str, command: str) -> tuple[str, str]:
         if proc.returncode == 0:
             return ServiceStatus.operational, "exit 0"
         stderr_text = (stderr or b"").decode(errors="replace").strip()
+        # Tracebacks can be hundreds of lines; keep the tail where the exception lives.
+        if len(stderr_text) > 500:
+            stderr_text = "..." + stderr_text[-497:]
         _log.warning("check %s: command exited %d: %s", name, proc.returncode, stderr_text)
         return ServiceStatus.outage, f"exit {proc.returncode}: {stderr_text}"
     except Exception as exc:  # noqa: BLE001
