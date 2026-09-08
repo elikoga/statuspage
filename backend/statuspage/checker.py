@@ -21,6 +21,12 @@ async def _check_http(client: httpx.AsyncClient, name: str, url: str) -> tuple[s
         resp = await client.get(url)
         if resp.status_code >= 500:
             return ServiceStatus.outage, f"HTTP {resp.status_code}"
+        # Caddy answers an empty-bodied 200 when no reverse-proxy route matches
+        # the host (e.g. runtime routes wiped by a config reload/restart). That
+        # is a silent outage: a healthy monitored service returns a body. Flag
+        # it so the status page catches it instead of reporting operational.
+        if resp.status_code == 200 and not resp.content:
+            return ServiceStatus.outage, "HTTP 200 (empty body - no route?)"
         return ServiceStatus.operational, f"HTTP {resp.status_code}"
     except (httpx.ConnectError, httpx.TimeoutException, httpx.TransportError) as exc:
         _log.warning("check %s failed: %s: %s", name, type(exc).__name__, exc)
