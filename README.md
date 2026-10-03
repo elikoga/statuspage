@@ -127,6 +127,25 @@ uv run alembic upgrade head
 
 ## Pitfalls
 
+### The checker must never report a broken monitor as broken services
+
+Name resolution happens inside httpx's connect timeout (httpcore wraps
+`anyio.connect_tcp` in `fail_after(connect_timeout)`), and it runs on the event
+loop's default thread pool — 6 workers on a 2-vCPU host. Consequences, all of
+which have burned us at least once:
+
+- `_CONNECT_TIMEOUT` must stay above glibc's resolver timeout (5s by default),
+  otherwise a single retried DNS lookup fails every in-flight check at once.
+- Each HTTP check is retried once (`_RETRY_DELAY` apart) before it counts as a
+  failure.
+- `_self_test()` (DNS lookup of `_CANARY_DNS_HOST` + TCP connect to
+  `_CANARY_TCP_ADDR`) runs before every round. If it fails, `run_checks()`
+  returns without touching service status: the monitoring host lost its
+  network, which is not the same thing as every monitored service being down.
+
+Do not remove the canary or shrink the connect timeout without first making
+sure the DNS path of the monitoring host is cached locally.
+
 ### Datetime serialization — always UTC-aware
 
 `datetime.datetime.utcnow()` returns a naive `datetime` (no `tzinfo`). Pydantic serializes

@@ -62,7 +62,7 @@ class ServiceCreate(BaseModel):
     muted: bool = False
     check_type: CheckType = CheckType.http
     check_command: str | None = None
-    failure_threshold: int = 2
+    failure_threshold: int = 3
 
 
 class ServiceUpdate(BaseModel):

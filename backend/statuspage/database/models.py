@@ -55,7 +55,7 @@ class Service(Base):
         Enum(CheckType), default=CheckType.http, nullable=False
     )
     check_command = Column(Text, nullable=True)
-    failure_threshold = Column(Integer, default=2, nullable=False, server_default="2")
+    failure_threshold = Column(Integer, default=3, nullable=False, server_default="3")
 
 
 class Incident(Base):
