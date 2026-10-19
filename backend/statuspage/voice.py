@@ -734,6 +734,9 @@ def _call_blocking(settings: VoiceSettings, pcm: bytes) -> None:
             )
         except TimeoutError as exc:
             raise NoAnswerError("no answer to INVITE") from exc
+        if code in (408, 480, 486, 487):
+            # Ring timeout, unavailable, busy, or cancelled: do not redial.
+            raise NoAnswerError(f"call not answered ({code})")
         if code != 200:
             raise RuntimeError(f"INVITE rejected: {code}")
 
