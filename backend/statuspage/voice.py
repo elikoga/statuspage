@@ -46,10 +46,15 @@ _call_lock = asyncio.Lock()
 
 _SIP_PORT = 5060
 _SIP_TIMEOUT = 12.0
+_INVITE_TIMEOUT = 45.0
 _RTP_PTIME = 0.020
 _RTP_PAYLOAD_BYTES = 160      # 20 ms of 8 kHz G.711
 _MAX_AUDIO_SECONDS = 60
 _REGISTER_EXPIRES = 900      # Vodafone's SBC enforces Min-Expires: 900
+
+
+class NoAnswerError(RuntimeError):
+    """The callee did not answer before the INVITE timeout."""
 
 
 @dataclasses.dataclass
@@ -161,6 +166,9 @@ async def _place(settings: VoiceSettings, text: str) -> bool:
                 await asyncio.to_thread(_call_blocking, settings, pcm)
                 _log.info("voice call to %s completed", settings.destination)
                 return True
+            except NoAnswerError as exc:
+                _log.warning("voice call not answered: %s", exc)
+                return False
             except Exception as exc:  # noqa: BLE001
                 _log.error("voice call attempt %d failed: %s", attempt, exc)
                 if attempt == 1:
@@ -523,6 +531,7 @@ def _send_request(
     auth_user: str = "",
     auth_password: str = "",
     contact_expires: int | None = None,
+    timeout: float = _SIP_TIMEOUT,
 ) -> tuple[int, dict[str, list[str]], bytes, int]:
     branch = f"z9hG4bK{os.urandom(6).hex()}"
     headers = [
@@ -551,7 +560,7 @@ def _send_request(
     headers.append(f"Content-Length: {len(body.encode())}")
     message = "\r\n".join(headers) + "\r\n\r\n" + body
 
-    code, resp_headers, resp_body = _transaction(sock, dest, message, method)
+    code, resp_headers, resp_body = _transaction(sock, dest, message, method, timeout)
     if code in (401, 407):
         name = "Proxy-Authorization" if code == 407 else "Authorization"
         source = "proxy-authenticate" if code == 407 else "www-authenticate"
@@ -581,6 +590,7 @@ def _send_request(
             auth_user=auth_user,
             auth_password=auth_password,
             contact_expires=contact_expires,
+            timeout=timeout,
         )
     return code, resp_headers, resp_body, cseq
 
@@ -699,27 +709,31 @@ def _call_blocking(settings: VoiceSettings, pcm: bytes) -> None:
         registered = True
 
         sdp = _build_sdp(local_ip, rtp_port)
-        code, headers, body, invite_cseq = _send_request(
-            sip_sock,
-            dest,
-            "INVITE",
-            request_uri,
-            local_ip=local_ip,
-            local_port=local_port,
-            call_id=call_id,
-            from_uri=from_uri,
-            to_uri=to_uri,
-            from_tag=from_tag,
-            to_tag=None,
-            cseq=1,
-            extra_headers={
-                "Allow": "INVITE, ACK, BYE, CANCEL, OPTIONS",
-                "P-Preferred-Identity": f"<{from_uri}>",
-            },
-            body=sdp,
-            auth_user=settings.sip_auth_username,
-            auth_password=settings.sip_password,
-        )
+        try:
+            code, headers, body, invite_cseq = _send_request(
+                sip_sock,
+                dest,
+                "INVITE",
+                request_uri,
+                local_ip=local_ip,
+                local_port=local_port,
+                call_id=call_id,
+                from_uri=from_uri,
+                to_uri=to_uri,
+                from_tag=from_tag,
+                to_tag=None,
+                cseq=1,
+                extra_headers={
+                    "Allow": "INVITE, ACK, BYE, CANCEL, OPTIONS",
+                    "P-Preferred-Identity": f"<{from_uri}>",
+                },
+                body=sdp,
+                auth_user=settings.sip_auth_username,
+                auth_password=settings.sip_password,
+                timeout=_INVITE_TIMEOUT,
+            )
+        except TimeoutError as exc:
+            raise NoAnswerError("no answer to INVITE") from exc
         if code != 200:
             raise RuntimeError(f"INVITE rejected: {code}")
 
@@ -775,7 +789,7 @@ def _call_blocking(settings: VoiceSettings, pcm: bytes) -> None:
             auth_user=settings.sip_auth_username,
             auth_password=settings.sip_password,
         )
-        if bye_code >= 300:
+        if bye_code >= 300 and bye_code != 481:
             _log.warning("BYE returned %s", bye_code)
     finally:
         if registered:
