@@ -50,7 +50,8 @@ export const actions: Actions = {
 			muted: data.get('muted') === 'true',
 			check_type: data.get('check_type') || 'http',
 			check_command: data.get('check_command') || null,
-			failure_threshold: Number(data.get('failure_threshold')) || 2
+			failure_threshold: Number(data.get('failure_threshold')) || 2,
+			voice_call: data.get('voice_call') === 'true'
 		});
 	},
 
@@ -69,7 +70,8 @@ export const actions: Actions = {
 			muted: data.get('muted') === 'true',
 			check_type: data.get('check_type') || undefined,
 			check_command: data.get('check_command') || null,
-			failure_threshold: Number(data.get('failure_threshold')) || undefined
+			failure_threshold: Number(data.get('failure_threshold')) || undefined,
+			voice_call: data.get('voice_call') === 'true'
 		});
 	},
 
@@ -121,6 +123,27 @@ export const actions: Actions = {
 		return apiFetch(fetch, 'PUT', '/api/notifications/discord', {
 			bot_token: tokenVal
 		});
+	},
+
+	saveVoice: async ({ fetch, request }) => {
+		const data = await request.formData();
+		return apiFetch(fetch, 'PUT', '/api/notifications/voice', {
+			enabled: data.get('enabled') === 'true',
+			destination: data.get('destination') || null,
+			delay_seconds: Math.round((Number(data.get('delay_minutes')) || 5) * 60),
+			sip_number: data.get('sip_number') || null,
+			sip_auth_username: data.get('sip_auth_username') || null,
+			sip_password: data.get('sip_password') || null,
+			sip_registrar: data.get('sip_registrar') || null,
+			sip_proxy: data.get('sip_proxy') || null,
+			dns_server: data.get('dns_server') || null,
+			tts_language: data.get('tts_language') || 'de',
+			message_template: data.get('message_template') || null
+		});
+	},
+
+	testVoiceCall: async ({ fetch }) => {
+		return apiFetch(fetch, 'POST', '/api/notifications/voice/test');
 	},
 
 	addEmailSubscriber: async ({ fetch, request }) => {

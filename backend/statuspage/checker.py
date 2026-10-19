@@ -165,6 +165,59 @@ async def _self_test() -> str | None:
     return None
 
 
+async def _maybe_voice_call(db_engine, now: datetime.datetime) -> None:
+    """Call once per outage episode after the configured delay.
+
+    The outage start comes from the newest history row, so this survives
+    restarts. ``voice_alerted_at`` is stamped before the call is dispatched;
+    a failed call is retried once inside the voice module.
+    """
+    from statuspage import voice as _voice
+
+    settings = _voice.load_settings()
+    if settings is None or _voice.busy():
+        return
+
+    with Session(db_engine) as session:
+        services = (
+            session.query(Service)
+            .filter(
+                Service.voice_call.is_(True),
+                Service.muted.is_(False),
+                Service.status == ServiceStatus.outage,
+            )
+            .all()
+        )
+        triggered: list[tuple[Service, datetime.datetime]] = []
+        for svc in services:
+            latest = (
+                session.query(ServiceStatusHistory)
+                .filter(ServiceStatusHistory.service_id == svc.id)
+                .order_by(ServiceStatusHistory.started_at.desc())
+                .first()
+            )
+            if latest is None or latest.status != ServiceStatus.outage:
+                continue
+            started = latest.started_at
+            if (now - started).total_seconds() < settings.delay_seconds:
+                continue
+            if svc.voice_alerted_at is not None and svc.voice_alerted_at >= started:
+                continue
+            triggered.append((svc, started))
+
+        if not triggered:
+            return
+
+        for svc, _started in triggered:
+            svc.voice_alerted_at = now
+        session.commit()
+        names = [svc.name for svc, _started in triggered]
+        minutes = max(1, int(min((now - started).total_seconds() for _, started in triggered) // 60))
+
+    _log.info("placing outage call for: %s", ", ".join(names))
+    asyncio.create_task(_voice.place_outage_call(names, minutes))
+
+
 async def run_checks(db_engine) -> None:
     """Run one round of health checks; updates DB in-place."""
     self_test_failure = await _self_test()
@@ -258,12 +311,17 @@ async def run_checks(db_engine) -> None:
                     status=new_status,
                     started_at=now,
                 ))
+                if new_status != ServiceStatus.outage:
+                    # A new outage episode starts from scratch.
+                    svc.voice_alerted_at = None
                 if not muted:
                     status_changes.append((svc_name, prior_status.value, new_status.value, svc_url, detail))
             svc.status = new_status
             svc.last_checked_at = now
         session.commit()
     _log.info("checked %d services", len(targets))
+
+    await _maybe_voice_call(db_engine, now)
 
     # Fire notifications after the commit so DB is consistent if they fail.
     if status_changes:

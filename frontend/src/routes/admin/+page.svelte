@@ -83,6 +83,10 @@
 						<input type="checkbox" name="muted" value="true" class="rounded" />
 						Muted
 					</label>
+					<label class="flex items-center gap-2 text-sm text-gray-700">
+						<input type="checkbox" name="voice_call" value="true" class="rounded" />
+						Call on outage
+					</label>
 				<label class="flex items-center gap-2 text-sm text-gray-700 sm:col-span-2">
 					Failure threshold
 					<input
@@ -185,6 +189,10 @@
 									<input type="checkbox" name="muted" value="true" checked={editingService.muted === true} class="rounded" />
 									Muted
 									</label>
+									<label class="flex items-center gap-2 text-sm text-gray-700">
+									<input type="checkbox" name="voice_call" value="true" checked={editingService.voice_call === true} class="rounded" />
+									Call on outage
+									</label>
 						<label class="flex items-center gap-2 text-sm text-gray-700 sm:col-span-2">
 							Failure threshold
 							<input
@@ -262,6 +270,9 @@
 											{/if}
 											{#if service.check_type === 'command'}
 												<span class="text-xs px-1.5 py-0.5 rounded bg-purple-50 text-purple-700">Command check</span>
+											{/if}
+											{#if service.voice_call}
+												<span class="text-xs px-1.5 py-0.5 rounded bg-orange-50 text-orange-700">Phone alert</span>
 											{/if}
 										</div>
 									</div>
@@ -451,6 +462,56 @@
 						<div class="flex justify-end">
 							<button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white rounded px-4 py-2 text-sm font-medium">Save</button>
 						</div>
+					</form>
+				</div>
+
+				<!-- Voice calls -->
+				<div class="bg-white rounded-lg border border-gray-200 p-4">
+					<h3 class="text-base font-medium text-gray-700 mb-3">Phone call (SIP + TTS)</h3>
+					<form method="POST" action="?/saveVoice" use:enhance class="flex flex-col gap-3">
+						<label class="flex items-center gap-2 text-sm text-gray-700">
+							<input type="checkbox" name="enabled" value="true" checked={data.notifSettings.voice.enabled} class="rounded" />
+							Call my mobile when a service stays down
+						</label>
+						<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+							<label class="text-sm text-gray-600">Mobile number (E.164)
+								<input name="destination" value={data.notifSettings.voice.destination ?? ''} placeholder="+491701234567" class="mt-1 w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+							</label>
+							<label class="text-sm text-gray-600">Call after (minutes)
+								<input type="number" name="delay_minutes" min="1" value={Math.round((data.notifSettings.voice.delay_seconds ?? 300) / 60)} class="mt-1 w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+							</label>
+							<label class="text-sm text-gray-600">SIP number (caller ID)
+								<input name="sip_number" value={data.notifSettings.voice.sip_number ?? ''} placeholder="+4952517090538" class="mt-1 w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+							</label>
+							<label class="text-sm text-gray-600">SIP auth username
+								<input name="sip_auth_username" value={data.notifSettings.voice.sip_auth_username ?? ''} placeholder="IMPI_4952517090538" class="mt-1 w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+							</label>
+							<label class="text-sm text-gray-600">SIP password
+								<input type="password" name="sip_password" placeholder={data.notifSettings.voice.sip_password_set ? '(configured — leave blank to keep)' : 'password'} class="mt-1 w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+							</label>
+							<label class="text-sm text-gray-600">SIP registrar
+								<input name="sip_registrar" value={data.notifSettings.voice.sip_registrar ?? ''} placeholder="fixed.vodafone.de" class="mt-1 w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+							</label>
+							<label class="text-sm text-gray-600">SIP proxy / outbound (optional)
+								<input name="sip_proxy" value={data.notifSettings.voice.sip_proxy ?? ''} placeholder="egf12.fixed.vodafone.de" class="mt-1 w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+							</label>
+							<label class="text-sm text-gray-600">DNS server (optional)
+								<input name="dns_server" value={data.notifSettings.voice.dns_server ?? ''} placeholder="1.1.1.1" class="mt-1 w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+							</label>
+							<label class="text-sm text-gray-600">TTS language
+								<input name="tts_language" value={data.notifSettings.voice.tts_language ?? 'de'} placeholder="de" class="mt-1 w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+							</label>
+						</div>
+						<label class="text-sm text-gray-600">Message template (optional)
+							<textarea name="message_template" rows="2" placeholder={'Achtung. Statusseite {instance}. {services} seit {minutes} Minuten nicht erreichbar.'} class="mt-1 w-full border border-gray-300 rounded px-3 py-2 text-sm font-mono">{data.notifSettings.voice.message_template ?? ''}</textarea>
+						</label>
+						<p class="text-xs text-gray-400">Placeholders: {'{services}'}, {'{instance}'}, {'{minutes}'}. One call per outage episode.</p>
+						<div class="flex justify-end">
+							<button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white rounded px-4 py-2 text-sm font-medium">Save</button>
+						</div>
+					</form>
+					<form method="POST" action="?/testVoiceCall" use:enhance class="flex justify-end mt-2">
+						<button type="submit" class="border border-gray-300 rounded px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Call me now (test)</button>
 					</form>
 				</div>
 

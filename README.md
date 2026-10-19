@@ -101,6 +101,31 @@ Because the callback is a direct browser redirect (not a proxied SSR fetch),
 the backend can set the session cookie directly in the response.
 
 Username is taken from `preferred_username`, falling back to `email`, then `sub`.
+
+## Notifications
+
+Email (SMTP via env), Telegram, Discord, and phone calls are configured in
+`/admin`. Secrets live in the SQLite database; the API only reports whether a
+secret is set.
+
+### Phone calls (SIP + TTS)
+
+Enable **Phone call (SIP + TTS)** in the admin UI and fill in the destination
+mobile number, the SIP account used as caller, and the delay. Then mark the
+services that should ring you with **Call on outage** (create/edit form).
+
+- One call is placed per outage episode, once the service has been in `outage`
+  for the configured delay (default 5 minutes). Recovery resets the episode.
+- Multiple services that cross the threshold in the same check round share one
+  call.
+- The text is synthesized with `espeak-ng` (must be on `PATH`; the NixOS module
+  adds it) and streamed as G.711 over RTP. No SIP registration is performed —
+  registration would fork inbound calls away from the home phone.
+- **Call me now (test)** in the admin UI places a test call with the saved
+  settings.
+- SIP servers that publish `_sip._udp` SRV records are resolved automatically;
+  set the optional DNS server field if the host resolver cannot see them.
+
 ## Database migrations
 
 ```bash

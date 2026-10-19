@@ -61,6 +61,8 @@ async def lifespan(app: FastAPI):
         _self.db_engine = app.state.db_engine
         from statuspage import notifier as _notifier
         _notifier._db_engine = app.state.db_engine
+        from statuspage import voice as _voice
+        _voice._db_engine = app.state.db_engine
 
         logger.info("starting frontend")
         await frontend.frontend.run()

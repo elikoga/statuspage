@@ -56,6 +56,8 @@ class Service(Base):
     )
     check_command = Column(Text, nullable=True)
     failure_threshold = Column(Integer, default=3, nullable=False, server_default="3")
+    voice_call = Column(Boolean, default=False, nullable=False, server_default="0")
+    voice_alerted_at = Column(DateTime, nullable=True)
 
 
 class Incident(Base):
@@ -127,3 +129,21 @@ class DiscordDestination(Base):
     destination_id = Column(String, nullable=False)
     label = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+
+
+class VoiceCallConfig(Base):
+    """Singleton SIP + TTS settings for outage phone calls."""
+
+    __tablename__ = "voice_call_config"
+    singleton_id = Column(String, primary_key=True, default="default")
+    enabled = Column(Boolean, default=False, nullable=False)
+    destination = Column(String, nullable=True)          # mobile number to dial
+    delay_seconds = Column(Integer, default=300, nullable=False, server_default="300")
+    sip_number = Column(String, nullable=True)           # caller number / From user
+    sip_auth_username = Column(String, nullable=True)    # defaults to sip_number
+    sip_password = Column(String, nullable=True)
+    sip_registrar = Column(String, nullable=True)        # e.g. fixed.vodafone.de
+    sip_proxy = Column(String, nullable=True)            # e.g. egf12.fixed.vodafone.de
+    dns_server = Column(String, nullable=True)           # optional, e.g. 1.1.1.1
+    tts_language = Column(String, default="de", nullable=False, server_default="de")
+    message_template = Column(Text, nullable=True)       # {services} {instance} {minutes}

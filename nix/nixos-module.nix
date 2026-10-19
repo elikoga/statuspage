@@ -108,7 +108,7 @@ in
       wants = [ "network-online.target" ];
       after = [ "network-online.target" ];
 
-      path = with pkgs; [ bash coreutils curl openssh nix python3 "/run/current-system/sw" ];
+      path = with pkgs; [ bash coreutils curl openssh nix python3 espeak-ng "/run/current-system/sw" ];
       script =
         let
           passwordLoader = lib.optionalString (cfg.smtp-password-file != null) ''

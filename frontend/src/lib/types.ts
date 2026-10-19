@@ -23,6 +23,7 @@ export interface Service extends ServicePublic {
   check_type: string;
   check_command?: string | null;
   failure_threshold: number;
+  voice_call: boolean;
 }
 
 export interface Incident {

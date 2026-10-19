@@ -4,11 +4,11 @@ import uuid
 from collections import defaultdict
 
 from fastapi import APIRouter, BackgroundTasks, Cookie, Depends, HTTPException, Query
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
 from statuspage.database.connection import get_db
-from statuspage.database.models import CheckType, Incident, IncidentStatus, Service, ServiceStatus, ServiceStatusHistory, EmailSubscriber, TelegramConfig, DiscordConfig, DiscordDestination
+from statuspage.database.models import CheckType, Incident, IncidentStatus, Service, ServiceStatus, ServiceStatusHistory, EmailSubscriber, TelegramConfig, DiscordConfig, DiscordDestination, VoiceCallConfig
 from statuspage import auth as _auth
 
 router = APIRouter(tags=["api"])
@@ -63,6 +63,7 @@ class ServiceCreate(BaseModel):
     check_type: CheckType = CheckType.http
     check_command: str | None = None
     failure_threshold: int = 3
+    voice_call: bool = False
 
 
 class ServiceUpdate(BaseModel):
@@ -78,6 +79,7 @@ class ServiceUpdate(BaseModel):
     check_type: CheckType | None = None
     check_command: str | None = None
     failure_threshold: int | None = None
+    voice_call: bool | None = None
 
 
 class ServiceOut(_UTCModel):
@@ -97,6 +99,7 @@ class ServiceOut(_UTCModel):
     check_type: CheckType
     check_command: str | None
     failure_threshold: int
+    voice_call: bool
 
 
 
@@ -146,6 +149,7 @@ def create_service(body: ServiceCreate, db: Session = Depends(get_db), _user: st
         check_type=body.check_type,
         check_command=body.check_command,
         failure_threshold=body.failure_threshold,
+        voice_call=body.voice_call,
         created_at=_now(),
         updated_at=_now(),
     )
@@ -167,7 +171,7 @@ def update_service(
     service_id: str, body: ServiceUpdate, db: Session = Depends(get_db), _user: str = Depends(require_auth)
 ):
     service = _get_or_404(db, Service, service_id, "Service not found")
-    _non_nullable = {'name', 'status', 'check_enabled', 'is_public', 'muted', 'check_type', 'failure_threshold'}
+    _non_nullable = {'name', 'status', 'check_enabled', 'is_public', 'muted', 'check_type', 'failure_threshold', 'voice_call'}
     for field in body.model_fields_set:
         value = getattr(body, field)
         if value is None and field in _non_nullable:
@@ -417,6 +421,7 @@ class DiscordDestinationOut(_UTCModel):
 def get_notification_settings(db: Session = Depends(get_db), _user: str = Depends(require_auth)):
     tg = db.get(TelegramConfig, "default")
     dc = db.get(DiscordConfig, "default")
+    vc = db.get(VoiceCallConfig, "default")
     return {
         "telegram": {
             "bot_token_set": bool(tg and tg.bot_token),
@@ -425,6 +430,19 @@ def get_notification_settings(db: Session = Depends(get_db), _user: str = Depend
         "discord": {
             "bot_token_set": bool(dc and dc.bot_token),
             "app_id": base64.b64decode(dc.bot_token.split('.')[0] + '==').decode() if (dc and dc.bot_token) else None,
+        },
+        "voice": {
+            "enabled": bool(vc and vc.enabled),
+            "destination": vc.destination if vc else None,
+            "delay_seconds": vc.delay_seconds if vc else 300,
+            "sip_number": vc.sip_number if vc else None,
+            "sip_auth_username": vc.sip_auth_username if vc else None,
+            "sip_password_set": bool(vc and vc.sip_password),
+            "sip_registrar": vc.sip_registrar if vc else None,
+            "sip_proxy": vc.sip_proxy if vc else None,
+            "dns_server": vc.dns_server if vc else None,
+            "tts_language": vc.tts_language if vc else "de",
+            "message_template": vc.message_template if vc else None,
         },
     }
 
@@ -448,6 +466,69 @@ def upsert_discord(body: DiscordConfigIn, db: Session = Depends(get_db), _user: 
         db.add(dc)
     dc.bot_token = body.bot_token
     db.commit()
+
+
+class VoiceConfigIn(BaseModel):
+    enabled: bool = False
+    destination: str | None = None
+    delay_seconds: int = Field(default=300, ge=1, le=86400)
+    sip_number: str | None = None
+    sip_auth_username: str | None = None
+    sip_password: str | None = None
+    sip_registrar: str | None = None
+    sip_proxy: str | None = None
+    dns_server: str | None = None
+    tts_language: str = "de"
+    message_template: str | None = None
+
+
+def _clean(value: str | None) -> str | None:
+    if value is None:
+        return None
+    value = value.strip()
+    return value or None
+
+
+@router.put("/notifications/voice", status_code=204)
+def upsert_voice(body: VoiceConfigIn, db: Session = Depends(get_db), _user: str = Depends(require_auth)):
+    vc = db.get(VoiceCallConfig, "default")
+    if vc is None:
+        vc = VoiceCallConfig(singleton_id="default", enabled=False)
+        db.add(vc)
+    vc.enabled = body.enabled
+    vc.destination = _clean(body.destination)
+    vc.delay_seconds = body.delay_seconds
+    vc.sip_number = _clean(body.sip_number)
+    vc.sip_auth_username = _clean(body.sip_auth_username)
+    vc.sip_registrar = _clean(body.sip_registrar)
+    vc.sip_proxy = _clean(body.sip_proxy)
+    vc.dns_server = _clean(body.dns_server)
+    vc.tts_language = _clean(body.tts_language) or "de"
+    vc.message_template = _clean(body.message_template)
+    if _clean(body.sip_password):
+        vc.sip_password = body.sip_password.strip()
+
+    if vc.enabled:
+        missing = [
+            name for name, value in (
+                ("destination", vc.destination),
+                ("SIP number", vc.sip_number),
+                ("SIP password", vc.sip_password),
+                ("SIP registrar", vc.sip_registrar),
+            ) if not value
+        ]
+        if missing:
+            raise HTTPException(status_code=422, detail="Missing: " + ", ".join(missing))
+    db.commit()
+
+
+@router.post("/notifications/voice/test", status_code=204)
+async def test_voice_call(_user: str = Depends(require_auth)):
+    from statuspage import voice as _voice
+    try:
+        await _voice.place_test_call()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
 
 
 @router.get("/notifications/email-subscribers", response_model=list[EmailSubscriberOut])
