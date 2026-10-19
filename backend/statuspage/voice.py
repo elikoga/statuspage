@@ -364,6 +364,39 @@ def _parse_response(data: bytes) -> tuple[int, dict[str, list[str]], bytes]:
     return int(match.group(1)), headers, body.encode("utf-8")
 
 
+def _parse_request(data: bytes) -> tuple[str, dict[str, list[str]], bytes]:
+    text = data.decode("utf-8", "replace")
+    head, _, body = text.partition("\r\n\r\n")
+    lines = head.split("\r\n")
+    method = lines[0].split(" ", 1)[0]
+    headers: dict[str, list[str]] = {}
+    last_key = None
+    for line in lines[1:]:
+        if not line:
+            continue
+        if line[0] in " \t" and last_key:
+            headers[last_key][-1] += " " + line.strip()
+            continue
+        if ":" in line:
+            key, value = line.split(":", 1)
+            key = key.strip().lower()
+            headers.setdefault(key, []).append(value.strip())
+            last_key = key
+    return method, headers, body.encode("utf-8")
+
+
+def _bye_response(headers: dict[str, list[str]]) -> str:
+    lines = ["SIP/2.0 200 OK"]
+    for via in headers.get("via", []):
+        lines.append(f"Via: {via}")
+    lines.append(f"From: {headers.get('from', [''])[0]}")
+    lines.append(f"To: {headers.get('to', [''])[0]}")
+    lines.append(f"Call-ID: {headers.get('call-id', [''])[0]}")
+    lines.append(f"CSeq: {headers.get('cseq', [''])[0]}")
+    lines.append("Content-Length: 0")
+    return "\r\n".join(lines) + "\r\n\r\n"
+
+
 def _parse_auth_params(header: str) -> dict[str, str]:
     params: dict[str, str] = {}
     for key, quoted, bare in re.findall(r'(\w+)\s*=\s*(?:"([^"]*)"|([^\s,]+))', header):
@@ -603,14 +636,34 @@ def _send_rtp(
     dest: tuple[str, int],
     payload: bytes,
     codec: str,
+    sip_sock: socket.socket | None = None,
     ptime: float = _RTP_PTIME,
-) -> None:
+) -> str:
+    """Stream G.711 packets; return ``"bye"`` if the far end hung up."""
     payload_type = 0 if codec == "PCMU" else 8
     seq = random.randint(0, 0xFFFF)
     timestamp = random.randint(0, 0xFFFFFFFF)
     ssrc = random.randint(0, 0xFFFFFFFF)
     next_send = time.monotonic()
     for offset in range(0, len(payload), _RTP_PAYLOAD_BYTES):
+        if sip_sock is not None:
+            sip_sock.setblocking(False)
+            try:
+                while True:
+                    data, addr = sip_sock.recvfrom(65535)
+                    if data.startswith(b"BYE "):
+                        method, headers, _ = _parse_request(data)
+                        reason = headers.get("reason", ["(no reason)"])[0]
+                        _log.info("remote ended call (%s): %s", method, reason)
+                        sip_sock.sendto(_bye_response(headers).encode(), addr)
+                        return "bye"
+                    if data.startswith(b"INVITE "):
+                        _log.warning("ignoring mid-call re-INVITE")
+            except BlockingIOError:
+                pass
+            finally:
+                sip_sock.setblocking(True)
+                sip_sock.settimeout(_SIP_TIMEOUT)
         chunk = payload[offset : offset + _RTP_PAYLOAD_BYTES]
         marker = 0x80 if offset == 0 else 0
         header = struct.pack(
@@ -623,6 +676,7 @@ def _send_rtp(
         delay = next_send - time.monotonic()
         if delay > 0:
             time.sleep(delay)
+    return "played"
 
 
 def _register(
@@ -734,6 +788,8 @@ def _call_blocking(settings: VoiceSettings, pcm: bytes) -> None:
                 cseq=1,
                 extra_headers={
                     "Allow": "INVITE, ACK, BYE, CANCEL, OPTIONS",
+                    "Accept": "application/sdp",
+                    "Content-Type": "application/sdp",
                     "P-Preferred-Identity": f"<{from_uri}>",
                 },
                 body=sdp,
@@ -781,7 +837,11 @@ def _call_blocking(settings: VoiceSettings, pcm: bytes) -> None:
         sip_sock.sendto(ack.encode(), dest)
 
         encoded = _encode_g711(pcm, codec)
-        _send_rtp(rtp_sock, (remote_ip, remote_port), encoded, codec)
+        outcome = _send_rtp(
+            rtp_sock, (remote_ip, remote_port), encoded, codec, sip_sock=sip_sock
+        )
+        if outcome == "bye":
+            return
 
         # Let the last packets drain, then end the call.
         time.sleep(0.8)
