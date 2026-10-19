@@ -39,11 +39,16 @@
       statuspage = pkgs.callPackage ./backend {
         inherit pyproject-nix uv2nix pyproject-build-systems statuspage-frontend;
       };
+
+      piper-voice = pkgs.callPackage ./nix/piper-voice.nix { };
+      piper-voice-en = pkgs.callPackage ./nix/piper-voice-en.nix { };
     in
     {
       packages = {
         statuspage-frontend = statuspage-frontend;
         statuspage = statuspage;
+        piper-voice = piper-voice;
+        piper-voice-en = piper-voice-en;
         default = statuspage;
       };
 
@@ -61,6 +66,8 @@
         nixpkgs.overlays = [
           (final: prev: {
             statuspage = self.packages.${final.stdenv.system}.statuspage;
+            piper-voice = self.packages.${final.stdenv.system}.piper-voice;
+            piper-voice-en = self.packages.${final.stdenv.system}.piper-voice-en;
           })
         ];
       };

@@ -39,6 +39,18 @@ in
       description = "How often (in seconds) to run health checks.";
     };
 
+    piper-model = lib.mkOption {
+      type = lib.types.str;
+      default = "${pkgs.piper-voice}/de_DE-thorsten-medium.onnx";
+      description = "Path to the German Piper ONNX voice model used for phone-call TTS.";
+    };
+
+    piper-model-en = lib.mkOption {
+      type = lib.types.str;
+      default = "${pkgs.piper-voice-en}/en_US-lessac-medium.onnx";
+      description = "Path to the English Piper ONNX voice model used for phone-call TTS.";
+    };
+
     smtp-host = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
       default = null;
@@ -136,6 +148,8 @@ in
         STATUSPAGE_DATA_PATH = cfg.data-path;
         STATUSPAGE_BASE_URL = cfg.base-url;
         STATUSPAGE_CHECK_INTERVAL_SECONDS = builtins.toString cfg.check-interval-seconds;
+        STATUSPAGE_PIPER_MODEL = cfg.piper-model;
+        STATUSPAGE_PIPER_MODEL_EN = cfg.piper-model-en;
       } // lib.optionalAttrs (cfg.smtp-host != null) {
         STATUSPAGE_SMTP_HOST = cfg.smtp-host;
         STATUSPAGE_SMTP_PORT = builtins.toString cfg.smtp-port;

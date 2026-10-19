@@ -118,10 +118,20 @@ services that should ring you with **Call on outage** (create/edit form).
   for the configured delay (default 5 minutes). Recovery resets the episode.
 - Multiple services that cross the threshold in the same check round share one
   call.
-- The text is synthesized with `espeak-ng` (must be on `PATH`; the NixOS module
-  adds it) and streamed as G.711 over RTP. The caller AOR is registered only
-  for the call (Vodafone's SBC rejects unregistered INVITEs) and unregistered
-  immediately afterwards with `Expires: 0`.
+- The text is synthesized with Piper (neural TTS, `piper-tts` Python package)
+  and streamed as G.711 over RTP. German and English voices are packaged; the
+  `tts_language` setting selects the German/English model, and a custom model
+  path can be set in the UI. `espeak-ng` remains a fallback.
+- The message includes the service URL and the last check error. Dashes are
+  spoken as “minus”, domains are read separator by separator, and hard tokens
+  (acronyms, mixed letter/digit IDs) are spelled out letter by letter. `upb`
+  in a domain is always spelled `U P B`.
+- The message repeats until the callee hangs up (or the stop-after limit,
+  default 10 minutes), with at least `repeat_count` passes and a configurable
+  pause between them.
+- The caller AOR is registered only for the call (Vodafone's SBC rejects
+  unregistered INVITEs) and unregistered immediately afterwards with
+  `Expires: 0`.
 - **Call me now (test)** in the admin UI places a test call with the saved
   settings.
 - SIP servers that publish `_sip._udp` SRV records are resolved automatically;

@@ -138,6 +138,11 @@ export const actions: Actions = {
 			sip_proxy: data.get('sip_proxy') || null,
 			dns_server: data.get('dns_server') || null,
 			tts_language: data.get('tts_language') || 'de',
+			tts_engine: data.get('tts_engine') || 'piper',
+			tts_model: data.get('tts_model') || null,
+			repeat_count: Number(data.get('repeat_count')) || 3,
+			repeat_pause_seconds: Number(data.get('repeat_pause_seconds')) || 0,
+			max_call_seconds: Math.round((Number(data.get('max_call_minutes')) || 10) * 60),
 			message_template: data.get('message_template') || null
 		});
 	},

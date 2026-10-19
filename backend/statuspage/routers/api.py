@@ -442,6 +442,11 @@ def get_notification_settings(db: Session = Depends(get_db), _user: str = Depend
             "sip_proxy": vc.sip_proxy if vc else None,
             "dns_server": vc.dns_server if vc else None,
             "tts_language": vc.tts_language if vc else "de",
+            "tts_engine": vc.tts_engine if vc else "piper",
+            "tts_model": vc.tts_model if vc else None,
+            "repeat_count": vc.repeat_count if vc else 3,
+            "repeat_pause_seconds": vc.repeat_pause_seconds if vc else 0.8,
+            "max_call_seconds": vc.max_call_seconds if vc else 600,
             "message_template": vc.message_template if vc else None,
         },
     }
@@ -479,6 +484,11 @@ class VoiceConfigIn(BaseModel):
     sip_proxy: str | None = None
     dns_server: str | None = None
     tts_language: str = "de"
+    tts_engine: str = "piper"
+    tts_model: str | None = None
+    repeat_count: int = Field(default=3, ge=1, le=10)
+    repeat_pause_seconds: float = Field(default=0.8, ge=0, le=10)
+    max_call_seconds: int = Field(default=600, ge=30, le=3600)
     message_template: str | None = None
 
 
@@ -504,6 +514,11 @@ def upsert_voice(body: VoiceConfigIn, db: Session = Depends(get_db), _user: str 
     vc.sip_proxy = _clean(body.sip_proxy)
     vc.dns_server = _clean(body.dns_server)
     vc.tts_language = _clean(body.tts_language) or "de"
+    vc.tts_engine = _clean(body.tts_engine) or "piper"
+    vc.tts_model = _clean(body.tts_model)
+    vc.repeat_count = body.repeat_count
+    vc.repeat_pause_seconds = body.repeat_pause_seconds
+    vc.max_call_seconds = body.max_call_seconds
     vc.message_template = _clean(body.message_template)
     if _clean(body.sip_password):
         vc.sip_password = body.sip_password.strip()

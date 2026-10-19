@@ -498,14 +498,32 @@
 							<label class="text-sm text-gray-600">DNS server (optional)
 								<input name="dns_server" value={data.notifSettings.voice.dns_server ?? ''} placeholder="1.1.1.1" class="mt-1 w-full border border-gray-300 rounded px-3 py-2 text-sm" />
 							</label>
-							<label class="text-sm text-gray-600">TTS language
+							<label class="text-sm text-gray-600">TTS engine
+								<select name="tts_engine" class="mt-1 w-full border border-gray-300 rounded px-3 py-2 text-sm">
+									<option value="piper" selected={(data.notifSettings.voice.tts_engine ?? 'piper') === 'piper'}>Piper (neural)</option>
+									<option value="espeak-ng" selected={data.notifSettings.voice.tts_engine === 'espeak-ng'}>espeak-ng (fallback)</option>
+								</select>
+							</label>
+							<label class="text-sm text-gray-600">Piper model path (optional)
+								<input name="tts_model" value={data.notifSettings.voice.tts_model ?? ''} placeholder="defaults to STATUSPAGE_PIPER_MODEL" class="mt-1 w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+							</label>
+							<label class="text-sm text-gray-600">TTS language (espeak fallback)
 								<input name="tts_language" value={data.notifSettings.voice.tts_language ?? 'de'} placeholder="de" class="mt-1 w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+							</label>
+							<label class="text-sm text-gray-600">Minimum repeats (then loops until you hang up)
+								<input type="number" name="repeat_count" min="1" max="10" value={data.notifSettings.voice.repeat_count ?? 3} class="mt-1 w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+							</label>
+							<label class="text-sm text-gray-600">Pause between repeats (seconds)
+								<input type="number" name="repeat_pause_seconds" min="0" max="10" step="0.1" value={data.notifSettings.voice.repeat_pause_seconds ?? 0.8} class="mt-1 w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+							</label>
+							<label class="text-sm text-gray-600">Stop after (minutes)
+								<input type="number" name="max_call_minutes" min="1" max="60" value={Math.round((data.notifSettings.voice.max_call_seconds ?? 600) / 60)} class="mt-1 w-full border border-gray-300 rounded px-3 py-2 text-sm" />
 							</label>
 						</div>
 						<label class="text-sm text-gray-600">Message template (optional)
 							<textarea name="message_template" rows="2" placeholder={'Achtung. Statusseite {instance}. {services} seit {minutes} Minuten nicht erreichbar.'} class="mt-1 w-full border border-gray-300 rounded px-3 py-2 text-sm font-mono">{data.notifSettings.voice.message_template ?? ''}</textarea>
 						</label>
-						<p class="text-xs text-gray-400">Placeholders: {'{services}'}, {'{instance}'}, {'{minutes}'}. One call per outage episode.</p>
+						<p class="text-xs text-gray-400">Placeholders: {'{services}'}, {'{instance}'}, {'{minutes}'}. {'{services}'} includes the URL and last check error. One call per outage episode; it repeats until you hang up (or the stop-after limit).</p>
 						<div class="flex justify-end">
 							<button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white rounded px-4 py-2 text-sm font-medium">Save</button>
 						</div>

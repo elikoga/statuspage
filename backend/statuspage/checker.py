@@ -211,11 +211,19 @@ async def _maybe_voice_call(db_engine, now: datetime.datetime) -> None:
         for svc, _started in triggered:
             svc.voice_alerted_at = now
         session.commit()
-        names = [svc.name for svc, _started in triggered]
-        minutes = max(1, int(min((now - started).total_seconds() for _, started in triggered) // 60))
+        entries = [
+            {
+                "name": svc.name,
+                "domain": svc.site_url or svc.url or "",
+                "detail": (svc.last_detail or "").strip()[:300],
+                "minutes": max(1, int((now - started).total_seconds() // 60)),
+            }
+            for svc, started in triggered
+        ]
+        minutes = min(e["minutes"] for e in entries)
 
-    _log.info("placing outage call for: %s", ", ".join(names))
-    asyncio.create_task(_voice.place_outage_call(names, minutes))
+    _log.info("placing outage call for: %s", ", ".join(e["name"] for e in entries))
+    asyncio.create_task(_voice.place_outage_call(entries, minutes))
 
 
 async def run_checks(db_engine) -> None:
@@ -317,6 +325,7 @@ async def run_checks(db_engine) -> None:
                 if not muted:
                     status_changes.append((svc_name, prior_status.value, new_status.value, svc_url, detail))
             svc.status = new_status
+            svc.last_detail = detail
             svc.last_checked_at = now
         session.commit()
     _log.info("checked %d services", len(targets))

@@ -23,6 +23,7 @@ import logging
 import os
 import random
 import re
+import shutil
 import socket
 import struct
 import subprocess
@@ -49,7 +50,7 @@ _SIP_TIMEOUT = 12.0
 _INVITE_TIMEOUT = 45.0
 _RTP_PTIME = 0.020
 _RTP_PAYLOAD_BYTES = 160      # 20 ms of 8 kHz G.711
-_MAX_AUDIO_SECONDS = 60
+_MAX_AUDIO_SECONDS = 180
 _REGISTER_EXPIRES = 900      # Vodafone's SBC enforces Min-Expires: 900
 
 
@@ -69,6 +70,11 @@ class VoiceSettings:
     tts_language: str
     message_template: str | None
     delay_seconds: int
+    tts_engine: str = "piper"
+    tts_model: str | None = None
+    repeat_count: int = 3
+    repeat_pause_seconds: float = 0.8
+    max_call_seconds: int = 600
 
 
 # ── settings ──────────────────────────────────────────────────────────────────
@@ -98,25 +104,85 @@ def load_settings() -> VoiceSettings | None:
             tts_language=row.tts_language or "de",
             message_template=row.message_template or None,
             delay_seconds=int(row.delay_seconds or 300),
+            tts_engine=row.tts_engine or "piper",
+            tts_model=row.tts_model or None,
+            repeat_count=max(1, int(row.repeat_count or 3)),
+            repeat_pause_seconds=float(row.repeat_pause_seconds or 0.0),
+            max_call_seconds=max(30, int(row.max_call_seconds or 600)),
         )
 
 
-def build_message(service_names: list[str], minutes: int, settings: VoiceSettings) -> str:
-    instance = urlparse(_cfg.BASE_URL).netloc or _cfg.BASE_URL
-    services = ", ".join(service_names)
+_SPOKEN_SEPARATORS = {
+    "de": {"-": " minus ", ".": " punkt ", "_": " Unterstrich ", "/": " slash ", ":": " Doppelpunkt ", "+": " plus ", "@": " at "},
+    "en": {"-": " minus ", ".": " dot ", "_": " underscore ", "/": " slash ", ":": " colon ", "+": " plus ", "@": " at "},
+}
+
+
+def _lang_base(language: str) -> str:
+    return (language or "de").split("-")[0].split("_")[0].lower()
+
+
+_SPELLED_DOMAIN_WORDS = ("upb",)
+
+
+def _speak_domain(domain: str, language: str) -> str:
+    text = re.sub(r"^[A-Za-z]+://", "", domain or "").rstrip("/")
+    for char, word in _SPOKEN_SEPARATORS.get(_lang_base(language), _SPOKEN_SEPARATORS["de"]).items():
+        text = text.replace(char, word)
+    for word in _SPELLED_DOMAIN_WORDS:
+        text = re.sub(rf"\b{word}\b", " ".join(word.upper()), text, flags=re.I)
+    return " ".join(text.split())
+
+
+def _spell_if_hard(token: str) -> str:
+    core = re.sub(r"[^A-Za-z0-9]", "", token)
+    if not core:
+        return token
+    hard = (
+        re.fullmatch(r"[A-Z]{2,6}", core)
+        or (re.search(r"\d", core) and re.search(r"[A-Za-z]", core))
+        or (core.isdigit() and len(core) >= 5)
+    )
+    return " ".join(core) if hard else token
+
+
+def _speak_detail(detail: str, language: str) -> str:
+    text = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", detail or "")
+    for char, word in _SPOKEN_SEPARATORS.get(_lang_base(language), _SPOKEN_SEPARATORS["de"]).items():
+        text = text.replace(char, word)
+    return " ".join(_spell_if_hard(token) for token in text.split())
+
+
+def build_message(entries: list[dict], minutes: int, settings: VoiceSettings) -> str:
+    instance = _speak_domain(
+        urlparse(_cfg.BASE_URL).netloc or _cfg.BASE_URL, settings.tts_language
+    )
     lang = (settings.tts_language or "de").split("-")[0].lower()
+
+    def sentence(entry: dict) -> str:
+        name = _speak_detail(entry.get("name") or "?", settings.tts_language)
+        mins = max(1, int(entry.get("minutes") or minutes))
+        if lang == "de":
+            parts = [f"{name} ist seit {mins} Minuten nicht erreichbar."]
+            if entry.get("domain"):
+                parts.append(f"Adresse: {_speak_domain(entry['domain'], settings.tts_language)}.")
+            if entry.get("detail"):
+                parts.append(f"Fehler: {_speak_detail(entry['detail'], settings.tts_language)}.")
+        else:
+            parts = [f"{name} has been down for {mins} minutes."]
+            if entry.get("domain"):
+                parts.append(f"Address: {_speak_domain(entry['domain'], settings.tts_language)}.")
+            if entry.get("detail"):
+                parts.append(f"Error: {_speak_detail(entry['detail'], settings.tts_language)}.")
+        return " ".join(parts)
+
+    services = " ".join(sentence(e) for e in entries)
     if settings.message_template:
         template = settings.message_template
     elif lang == "de":
-        template = (
-            "Achtung. Statusseite {instance}. {services} "
-            "seit {minutes} Minuten nicht erreichbar."
-        )
+        template = "Achtung. Statusseite {instance}. {services}"
     else:
-        template = (
-            "Attention. Status page {instance}. {services} "
-            "has been down for {minutes} minutes."
-        )
+        template = "Attention. Status page {instance}. {services}"
     try:
         return template.format(services=services, instance=instance, minutes=minutes)
     except (KeyError, IndexError, ValueError):
@@ -130,12 +196,12 @@ def busy() -> bool:
     return _call_lock.locked()
 
 
-async def place_outage_call(service_names: list[str], minutes: int) -> bool:
+async def place_outage_call(entries: list[dict], minutes: int) -> bool:
     """Place one call covering every service that just crossed the delay."""
     settings = load_settings()
     if settings is None:
         return False
-    text = build_message(service_names, minutes, settings)
+    text = build_message(entries, minutes, settings)
     return await _place(settings, text)
 
 
@@ -143,7 +209,16 @@ async def place_test_call() -> bool:
     settings = load_settings()
     if settings is None:
         raise RuntimeError("voice calls are not enabled or not fully configured")
-    text = build_message(["Testdienst"], 1, settings)
+    text = build_message(
+        [{
+            "name": "Testdienst",
+            "domain": _cfg.BASE_URL,
+            "detail": "Testanruf",
+            "minutes": 1,
+        }],
+        1,
+        settings,
+    )
     ok = await _place(settings, text)
     if not ok:
         raise RuntimeError("test call failed; see statuspage logs for details")
@@ -156,7 +231,13 @@ async def _place(settings: VoiceSettings, text: str) -> bool:
         return False
     async with _call_lock:
         try:
-            pcm = await asyncio.to_thread(_synthesize, text, settings.tts_language)
+            pcm = await asyncio.to_thread(
+                _synthesize,
+                text,
+                settings.tts_language,
+                settings.tts_engine,
+                settings.tts_model,
+            )
         except Exception as exc:  # noqa: BLE001
             _log.error("voice call TTS failed: %s", exc)
             return False
@@ -179,8 +260,72 @@ async def _place(settings: VoiceSettings, text: str) -> bool:
 # ── TTS / audio ───────────────────────────────────────────────────────────────
 
 
-def _synthesize(text: str, language: str) -> bytes:
+def _synthesize(
+    text: str, language: str, engine: str = "piper", model: str | None = None
+) -> bytes:
     """Return 8 kHz mono 16-bit PCM for ``text``."""
+    if engine == "piper":
+        try:
+            return _synthesize_piper(text, model, language)
+        except Exception as exc:  # noqa: BLE001
+            _log.error("Piper TTS failed (%s); falling back to espeak-ng", exc)
+    return _synthesize_espeak(text, language)
+
+
+def _read_wav(path: str) -> bytes:
+    with wave.open(path, "rb") as wav:
+        sr = wav.getframerate()
+        channels = wav.getnchannels()
+        width = wav.getsampwidth()
+        frames = wav.readframes(wav.getnframes())
+    if width != 2:
+        raise RuntimeError(f"unsupported TTS sample width: {width}")
+    samples = array.array("h")
+    samples.frombytes(frames)
+    if sys.byteorder == "big":
+        samples.byteswap()
+    if channels > 1:
+        samples = array.array("h", samples[::channels])
+    return _resample(samples, sr, 8000).tobytes()
+
+
+def _synthesize_piper(text: str, model: str | None, language: str) -> bytes:
+    model = (
+        model
+        or os.environ.get(f"STATUSPAGE_PIPER_MODEL_{_lang_base(language).upper()}")
+        or os.environ.get("STATUSPAGE_PIPER_MODEL")
+    )
+    if not model:
+        raise RuntimeError("no Piper model configured")
+    if not os.path.exists(model):
+        raise RuntimeError(f"Piper model not found: {model}")
+    piper = shutil.which("piper")
+    if piper is None:
+        candidate = os.path.join(os.path.dirname(sys.executable), "piper")
+        if os.path.exists(candidate):
+            piper = candidate
+    if piper is None:
+        raise RuntimeError("piper is not installed or not on PATH")
+    config = model + ".json"
+    cmd = [piper, "-m", model]
+    if os.path.exists(config):
+        cmd += ["-c", config]
+    with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
+        cmd += ["-f", tmp.name]
+        try:
+            proc = subprocess.run(
+                cmd, input=text.encode(), capture_output=True, timeout=120
+            )
+        except FileNotFoundError as exc:
+            raise RuntimeError("piper is not installed or not on PATH") from exc
+        if proc.returncode != 0:
+            raise RuntimeError(
+                "piper failed: " + proc.stderr.decode("utf-8", "replace").strip()[-500:]
+            )
+        return _read_wav(tmp.name)
+
+
+def _synthesize_espeak(text: str, language: str) -> bytes:
     with tempfile.NamedTemporaryFile(suffix=".wav") as tmp:
         lang = (language or "de").split("-")[0].split("_")[0]
         try:
@@ -195,22 +340,9 @@ def _synthesize(text: str, language: str) -> bytes:
             raise RuntimeError(
                 "espeak-ng failed: " + proc.stderr.decode("utf-8", "replace").strip()
             )
-        with wave.open(tmp.name, "rb") as wav:
-            sr = wav.getframerate()
-            channels = wav.getnchannels()
-            width = wav.getsampwidth()
-            frames = wav.readframes(wav.getnframes())
+        return _read_wav(tmp.name)
 
-    if width != 2:
-        raise RuntimeError(f"unsupported TTS sample width: {width}")
-    samples = array.array("h")
-    samples.frombytes(frames)
-    if sys.byteorder == "big":
-        samples.byteswap()
-    if channels > 1:
-        mono = array.array("h", samples[::channels])
-        samples = mono
-    return _resample(samples, sr, 8000).tobytes()
+
 
 
 def _resample(samples: array.array, sr_in: int, sr_out: int) -> array.array:
@@ -638,12 +770,16 @@ def _send_rtp(
     codec: str,
     sip_sock: socket.socket | None = None,
     ptime: float = _RTP_PTIME,
+    state: dict | None = None,
 ) -> str:
     """Stream G.711 packets; return ``"bye"`` if the far end hung up."""
     payload_type = 0 if codec == "PCMU" else 8
-    seq = random.randint(0, 0xFFFF)
-    timestamp = random.randint(0, 0xFFFFFFFF)
-    ssrc = random.randint(0, 0xFFFFFFFF)
+    if state is None:
+        state = {
+            "seq": random.randint(0, 0xFFFF),
+            "timestamp": random.randint(0, 0xFFFFFFFF),
+            "ssrc": random.randint(0, 0xFFFFFFFF),
+        }
     next_send = time.monotonic()
     for offset in range(0, len(payload), _RTP_PAYLOAD_BYTES):
         if sip_sock is not None:
@@ -667,11 +803,12 @@ def _send_rtp(
         chunk = payload[offset : offset + _RTP_PAYLOAD_BYTES]
         marker = 0x80 if offset == 0 else 0
         header = struct.pack(
-            "!BBHII", 0x80, marker | payload_type, seq & 0xFFFF, timestamp, ssrc
+            "!BBHII", 0x80, marker | payload_type,
+            state["seq"] & 0xFFFF, state["timestamp"], state["ssrc"],
         )
         sock.sendto(header + chunk, dest)
-        seq = (seq + 1) & 0xFFFF
-        timestamp = (timestamp + len(chunk)) & 0xFFFFFFFF
+        state["seq"] = (state["seq"] + 1) & 0xFFFF
+        state["timestamp"] = (state["timestamp"] + len(chunk)) & 0xFFFFFFFF
         next_send += ptime
         delay = next_send - time.monotonic()
         if delay > 0:
@@ -837,11 +974,24 @@ def _call_blocking(settings: VoiceSettings, pcm: bytes) -> None:
         sip_sock.sendto(ack.encode(), dest)
 
         encoded = _encode_g711(pcm, codec)
-        outcome = _send_rtp(
-            rtp_sock, (remote_ip, remote_port), encoded, codec, sip_sock=sip_sock
-        )
-        if outcome == "bye":
-            return
+        deadline = time.monotonic() + settings.max_call_seconds
+        state = {
+            "seq": random.randint(0, 0xFFFF),
+            "timestamp": random.randint(0, 0xFFFFFFFF),
+            "ssrc": random.randint(0, 0xFFFFFFFF),
+        }
+        plays = 0
+        while plays < settings.repeat_count or time.monotonic() < deadline:
+            outcome = _send_rtp(
+                rtp_sock, (remote_ip, remote_port), encoded, codec,
+                sip_sock=sip_sock, state=state,
+            )
+            if outcome == "bye":
+                return
+            plays += 1
+            if plays >= settings.repeat_count and time.monotonic() >= deadline:
+                break
+            time.sleep(max(0.0, settings.repeat_pause_seconds))
 
         # Let the last packets drain, then end the call.
         time.sleep(0.8)

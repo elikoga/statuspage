@@ -2,7 +2,7 @@ import datetime
 import enum
 import uuid
 
-from sqlalchemy import Boolean, Column, DateTime, Enum, Index, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, Enum, Float, Index, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase
 
 
@@ -58,6 +58,7 @@ class Service(Base):
     failure_threshold = Column(Integer, default=3, nullable=False, server_default="3")
     voice_call = Column(Boolean, default=False, nullable=False, server_default="0")
     voice_alerted_at = Column(DateTime, nullable=True)
+    last_detail = Column(Text, nullable=True)
 
 
 class Incident(Base):
@@ -146,4 +147,9 @@ class VoiceCallConfig(Base):
     sip_proxy = Column(String, nullable=True)            # e.g. egf12.fixed.vodafone.de
     dns_server = Column(String, nullable=True)           # optional, e.g. 1.1.1.1
     tts_language = Column(String, default="de", nullable=False, server_default="de")
+    tts_engine = Column(String, default="piper", nullable=False, server_default="piper")
+    tts_model = Column(String, nullable=True)            # path to Piper .onnx model
+    repeat_count = Column(Integer, default=3, nullable=False, server_default="3")
+    repeat_pause_seconds = Column(Float, default=0.8, nullable=False, server_default="0.8")
+    max_call_seconds = Column(Integer, default=600, nullable=False, server_default="600")
     message_template = Column(Text, nullable=True)       # {services} {instance} {minutes}
