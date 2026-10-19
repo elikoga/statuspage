@@ -465,6 +465,12 @@ def _contact_uri(headers: dict[str, list[str]]) -> str | None:
 
 
 def _build_sdp(local_ip: str, rtp_port: int) -> str:
+    """Offer exactly one codec (PCMA); Vodafone's SBC validates SDP strictly.
+
+    PCMA is the only 8 kHz codec in Vodafone's answer set that we can encode.
+    Offering PCMU/telephone-event alongside it makes the Lucent SBC hang up
+    with ``Reason: SIP;cause=503;text="PO: SIP SDP Protocol Error."``.
+    """
     session_id = random.randint(1, 2**31 - 1)
     return "\r\n".join(
         [
@@ -473,11 +479,8 @@ def _build_sdp(local_ip: str, rtp_port: int) -> str:
             "s=statuspage",
             f"c=IN IP4 {local_ip}",
             "t=0 0",
-            f"m=audio {rtp_port} RTP/AVP 0 8 101",
-            "a=rtpmap:0 PCMU/8000",
+            f"m=audio {rtp_port} RTP/AVP 8",
             "a=rtpmap:8 PCMA/8000",
-            "a=rtpmap:101 telephone-event/8000",
-            "a=fmtp:101 0-16",
             "a=ptime:20",
             "a=sendrecv",
             "",
@@ -681,8 +684,14 @@ def _call_blocking(settings: VoiceSettings, pcm: bytes) -> None:
         sip_sock.bind((local_ip, 0))
         sip_sock.settimeout(_SIP_TIMEOUT)
         local_port = sip_sock.getsockname()[1]
-        rtp_sock.bind((local_ip, 0))
-        rtp_port = rtp_sock.getsockname()[1]
+        # RFC 3550: RTP uses an even port. The Lucent SBC rejects odd values.
+        while True:
+            rtp_sock.bind((local_ip, 0))
+            rtp_port = rtp_sock.getsockname()[1]
+            if rtp_port % 2 == 0:
+                break
+            rtp_sock.close()
+            rtp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
         registrar = settings.sip_registrar
         caller = settings.sip_number
