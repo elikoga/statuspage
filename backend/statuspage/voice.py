@@ -189,6 +189,42 @@ def build_message(entries: list[dict], minutes: int, settings: VoiceSettings) ->
         return template
 
 
+def build_segments(
+    entries: list[dict], minutes: int, settings: VoiceSettings
+) -> list[tuple[str, str]]:
+    """Return (text, language) segments.
+
+    German announcements keep the error text in a separate English segment so
+    Piper pronounces English exception/code text with an English voice.
+    """
+    lang = _lang_base(settings.tts_language)
+    if lang != "de" or settings.message_template:
+        return [(build_message(entries, minutes, settings), lang)]
+
+    instance = _speak_domain(
+        urlparse(_cfg.BASE_URL).netloc or _cfg.BASE_URL, settings.tts_language
+    )
+    base_parts = []
+    error_parts = []
+    for entry in entries:
+        name = _speak_detail(entry.get("name") or "?", "de")
+        mins = max(1, int(entry.get("minutes") or minutes))
+        sentence = f"{name} ist seit {mins} Minuten nicht erreichbar."
+        if entry.get("domain"):
+            sentence += f" Adresse: {_speak_domain(entry['domain'], 'de')}."
+        base_parts.append(sentence)
+        if entry.get("detail"):
+            error_parts.append(
+                f"{_speak_detail(entry.get('name') or '?', 'en')}: "
+                f"{_speak_detail(entry['detail'], 'en')}."
+            )
+
+    segments = [("Achtung. Statusseite " + instance + ". " + " ".join(base_parts), "de")]
+    if error_parts:
+        segments.append(("Error. " + " ".join(error_parts), "en"))
+    return segments
+
+
 # ── public API ────────────────────────────────────────────────────────────────
 
 
@@ -201,43 +237,49 @@ async def place_outage_call(entries: list[dict], minutes: int) -> bool:
     settings = load_settings()
     if settings is None:
         return False
-    text = build_message(entries, minutes, settings)
-    return await _place(settings, text)
+    segments = build_segments(entries, minutes, settings)
+    return await _place(settings, segments)
 
 
 async def place_test_call() -> bool:
     settings = load_settings()
     if settings is None:
         raise RuntimeError("voice calls are not enabled or not fully configured")
-    text = build_message(
+    segments = build_segments(
         [{
             "name": "Testdienst",
             "domain": _cfg.BASE_URL,
-            "detail": "Testanruf",
+            "detail": "Test call",
             "minutes": 1,
         }],
         1,
         settings,
     )
-    ok = await _place(settings, text)
+    ok = await _place(settings, segments)
     if not ok:
         raise RuntimeError("test call failed; see statuspage logs for details")
     return ok
 
 
-async def _place(settings: VoiceSettings, text: str) -> bool:
+async def _place(settings: VoiceSettings, segments: list[tuple[str, str]]) -> bool:
     if _call_lock.locked():
         _log.warning("voice call already in progress; skipping")
         return False
     async with _call_lock:
         try:
-            pcm = await asyncio.to_thread(
-                _synthesize,
-                text,
-                settings.tts_language,
-                settings.tts_engine,
-                settings.tts_model,
-            )
+            parts = []
+            for text, language in segments:
+                parts.append(
+                    await asyncio.to_thread(
+                        _synthesize,
+                        text,
+                        language,
+                        settings.tts_engine,
+                        settings.tts_model,
+                    )
+                )
+            gap = b"\x00\x00" * int(8000 * 0.25)
+            pcm = gap.join(parts)
         except Exception as exc:  # noqa: BLE001
             _log.error("voice call TTS failed: %s", exc)
             return False
