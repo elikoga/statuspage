@@ -447,6 +447,7 @@ def get_notification_settings(db: Session = Depends(get_db), _user: str = Depend
             "repeat_count": vc.repeat_count if vc else 3,
             "repeat_pause_seconds": vc.repeat_pause_seconds if vc else 0.8,
             "max_call_seconds": vc.max_call_seconds if vc else 600,
+            "escalation_schedule": vc.escalation_schedule if vc else "5m,30m,2h,6h,24h",
             "message_template": vc.message_template if vc else None,
         },
     }
@@ -489,6 +490,7 @@ class VoiceConfigIn(BaseModel):
     repeat_count: int = Field(default=3, ge=1, le=10)
     repeat_pause_seconds: float = Field(default=0.8, ge=0, le=10)
     max_call_seconds: int = Field(default=600, ge=30, le=3600)
+    escalation_schedule: str = "5m,30m,2h,6h,24h"
     message_template: str | None = None
 
 
@@ -519,6 +521,13 @@ def upsert_voice(body: VoiceConfigIn, db: Session = Depends(get_db), _user: str 
     vc.repeat_count = body.repeat_count
     vc.repeat_pause_seconds = body.repeat_pause_seconds
     vc.max_call_seconds = body.max_call_seconds
+    from statuspage import voice as _voice
+    try:
+        schedule = _voice.parse_schedule(body.escalation_schedule)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=f"invalid escalation schedule: {exc}")
+    vc.escalation_schedule = _clean(body.escalation_schedule) or "5m,30m,2h,6h,24h"
+    vc.delay_seconds = schedule[0]
     vc.message_template = _clean(body.message_template)
     if _clean(body.sip_password):
         vc.sip_password = body.sip_password.strip()

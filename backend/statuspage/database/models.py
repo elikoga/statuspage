@@ -58,6 +58,7 @@ class Service(Base):
     failure_threshold = Column(Integer, default=3, nullable=False, server_default="3")
     voice_call = Column(Boolean, default=False, nullable=False, server_default="0")
     voice_alerted_at = Column(DateTime, nullable=True)
+    voice_last_step = Column(Integer, default=-1, nullable=False, server_default="-1")
     last_detail = Column(Text, nullable=True)
 
 
@@ -152,4 +153,5 @@ class VoiceCallConfig(Base):
     repeat_count = Column(Integer, default=3, nullable=False, server_default="3")
     repeat_pause_seconds = Column(Float, default=0.8, nullable=False, server_default="0.8")
     max_call_seconds = Column(Integer, default=600, nullable=False, server_default="600")
+    escalation_schedule = Column(String, default="5m,30m,2h,6h,24h", nullable=False, server_default="5m,30m,2h,6h,24h")
     message_template = Column(Text, nullable=True)       # {services} {instance} {minutes}

@@ -477,8 +477,8 @@
 							<label class="text-sm text-gray-600">Mobile number (E.164)
 								<input name="destination" value={data.notifSettings.voice.destination ?? ''} placeholder="+491701234567" class="mt-1 w-full border border-gray-300 rounded px-3 py-2 text-sm" />
 							</label>
-							<label class="text-sm text-gray-600">Call after (minutes)
-								<input type="number" name="delay_minutes" min="1" value={Math.round((data.notifSettings.voice.delay_seconds ?? 300) / 60)} class="mt-1 w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+							<label class="text-sm text-gray-600">Escalation schedule (e.g. 5m,30m,2h,6h,24h)
+								<input name="escalation_schedule" value={data.notifSettings.voice.escalation_schedule ?? '5m,30m,2h,6h,24h'} placeholder="5m,30m,2h,6h,24h" class="mt-1 w-full border border-gray-300 rounded px-3 py-2 text-sm" />
 							</label>
 							<label class="text-sm text-gray-600">SIP number (caller ID)
 								<input name="sip_number" value={data.notifSettings.voice.sip_number ?? ''} placeholder="+4952517090538" class="mt-1 w-full border border-gray-300 rounded px-3 py-2 text-sm" />
@@ -523,7 +523,7 @@
 						<label class="text-sm text-gray-600">Message template (optional)
 							<textarea name="message_template" rows="2" placeholder={'Achtung. Statusseite {instance}. {services} seit {minutes} Minuten nicht erreichbar.'} class="mt-1 w-full border border-gray-300 rounded px-3 py-2 text-sm font-mono">{data.notifSettings.voice.message_template ?? ''}</textarea>
 						</label>
-						<p class="text-xs text-gray-400">Placeholders: {'{services}'}, {'{instance}'}, {'{minutes}'}. {'{services}'} includes the URL and last check error. One call per outage episode; it repeats until you hang up (or the stop-after limit).</p>
+						<p class="text-xs text-gray-400">Placeholders: {'{services}'}, {'{instance}'}, {'{minutes}'}. {'{services}'} includes the URL and last check error. One call at each schedule step; each call repeats until you hang up (or the stop-after limit).</p>
 						<div class="flex justify-end">
 							<button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white rounded px-4 py-2 text-sm font-medium">Save</button>
 						</div>

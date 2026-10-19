@@ -54,6 +54,51 @@ _MAX_AUDIO_SECONDS = 180
 _REGISTER_EXPIRES = 900      # Vodafone's SBC enforces Min-Expires: 900
 
 
+def parse_schedule(text: str) -> list[int]:
+    """Parse ``5m,30m,2h,6h,24h`` into sorted seconds."""
+    steps: list[int] = []
+    for raw in (text or "").split(","):
+        raw = raw.strip().lower()
+        if not raw:
+            continue
+        match = re.fullmatch(r"(\d+)\s*([smhd]?)", raw)
+        if not match:
+            raise ValueError(f"invalid duration: {raw}")
+        value = int(match.group(1))
+        unit = match.group(2) or "m"
+        steps.append(value * {"s": 1, "m": 60, "h": 3600, "d": 86400}[unit])
+    steps = sorted(set(steps))
+    if not steps:
+        raise ValueError("empty schedule")
+    return steps
+
+
+def _settings_schedule(row) -> list[int]:
+    try:
+        return parse_schedule(getattr(row, "escalation_schedule", "") or "")
+    except ValueError:
+        return [max(1, int(row.delay_seconds or 300))]
+
+
+def format_duration(seconds: int, language: str) -> str:
+    seconds = max(0, int(seconds))
+    lang = _lang_base(language)
+    if seconds < 3600:
+        value = max(1, seconds // 60)
+        if lang == "de":
+            return "einer Minute" if value == 1 else f"{value} Minuten"
+        return "1 minute" if value == 1 else f"{value} minutes"
+    if seconds < 172800:
+        value = max(1, seconds // 3600)
+        if lang == "de":
+            return "einer Stunde" if value == 1 else f"{value} Stunden"
+        return "1 hour" if value == 1 else f"{value} hours"
+    value = max(1, seconds // 86400)
+    if lang == "de":
+        return "einem Tag" if value == 1 else f"{value} Tagen"
+    return "1 day" if value == 1 else f"{value} days"
+
+
 class NoAnswerError(RuntimeError):
     """The callee did not answer before the INVITE timeout."""
 
@@ -75,6 +120,9 @@ class VoiceSettings:
     repeat_count: int = 3
     repeat_pause_seconds: float = 0.8
     max_call_seconds: int = 600
+    escalation_schedule: list[int] = dataclasses.field(
+        default_factory=lambda: [300, 1800, 7200, 21600, 86400]
+    )
 
 
 # ── settings ──────────────────────────────────────────────────────────────────
@@ -109,6 +157,7 @@ def load_settings() -> VoiceSettings | None:
             repeat_count=max(1, int(row.repeat_count or 3)),
             repeat_pause_seconds=float(row.repeat_pause_seconds or 0.0),
             max_call_seconds=max(30, int(row.max_call_seconds or 600)),
+            escalation_schedule=_settings_schedule(row),
         )
 
 
@@ -161,15 +210,16 @@ def build_message(entries: list[dict], minutes: int, settings: VoiceSettings) ->
 
     def sentence(entry: dict) -> str:
         name = _speak_detail(entry.get("name") or "?", settings.tts_language)
-        mins = max(1, int(entry.get("minutes") or minutes))
+        secs = int(entry.get("seconds") or (max(1, int(entry.get("minutes") or minutes)) * 60))
+        duration = format_duration(secs, settings.tts_language)
         if lang == "de":
-            parts = [f"{name} ist seit {mins} Minuten nicht erreichbar."]
+            parts = [f"{name} ist seit {duration} nicht erreichbar."]
             if entry.get("domain"):
                 parts.append(f"Adresse: {_speak_domain(entry['domain'], settings.tts_language)}.")
             if entry.get("detail"):
                 parts.append(f"Fehler: {_speak_detail(entry['detail'], settings.tts_language)}.")
         else:
-            parts = [f"{name} has been down for {mins} minutes."]
+            parts = [f"{name} has been down for {duration}."]
             if entry.get("domain"):
                 parts.append(f"Address: {_speak_domain(entry['domain'], settings.tts_language)}.")
             if entry.get("detail"):
@@ -208,8 +258,8 @@ def build_segments(
     error_parts = []
     for entry in entries:
         name = _speak_detail(entry.get("name") or "?", "de")
-        mins = max(1, int(entry.get("minutes") or minutes))
-        sentence = f"{name} ist seit {mins} Minuten nicht erreichbar."
+        secs = int(entry.get("seconds") or (max(1, int(entry.get("minutes") or minutes)) * 60))
+        sentence = f"{name} ist seit {format_duration(secs, 'de')} nicht erreichbar."
         if entry.get("domain"):
             sentence += f" Adresse: {_speak_domain(entry['domain'], 'de')}."
         base_parts.append(sentence)

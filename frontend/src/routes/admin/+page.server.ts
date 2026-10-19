@@ -130,7 +130,8 @@ export const actions: Actions = {
 		return apiFetch(fetch, 'PUT', '/api/notifications/voice', {
 			enabled: data.get('enabled') === 'true',
 			destination: data.get('destination') || null,
-			delay_seconds: Math.round((Number(data.get('delay_minutes')) || 5) * 60),
+			delay_seconds: 300,
+			escalation_schedule: data.get('escalation_schedule') || '5m,30m,2h,6h,24h',
 			sip_number: data.get('sip_number') || null,
 			sip_auth_username: data.get('sip_auth_username') || null,
 			sip_password: data.get('sip_password') || null,

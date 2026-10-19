@@ -166,17 +166,20 @@ async def _self_test() -> str | None:
 
 
 async def _maybe_voice_call(db_engine, now: datetime.datetime) -> None:
-    """Call once per outage episode after the configured delay.
+    """Place the next escalation call for services that crossed a step.
 
-    The outage start comes from the newest history row, so this survives
-    restarts. ``voice_alerted_at`` is stamped before the call is dispatched;
-    a failed call is retried once inside the voice module.
+    The schedule is a sorted list of seconds since the outage started
+    (default 5m, 30m, 2h, 6h, 24h). ``voice_last_step`` persists the index of
+    the last fired step, so restarts and repeated check rounds never duplicate
+    a call. If a restart skips several steps, only the highest crossed step is
+    called once.
     """
     from statuspage import voice as _voice
 
     settings = _voice.load_settings()
     if settings is None or _voice.busy():
         return
+    schedule = settings.escalation_schedule
 
     with Session(db_engine) as session:
         services = (
@@ -188,7 +191,7 @@ async def _maybe_voice_call(db_engine, now: datetime.datetime) -> None:
             )
             .all()
         )
-        triggered: list[tuple[Service, datetime.datetime]] = []
+        triggered: list[tuple[Service, datetime.datetime, int]] = []
         for svc in services:
             latest = (
                 session.query(ServiceStatusHistory)
@@ -199,30 +202,42 @@ async def _maybe_voice_call(db_engine, now: datetime.datetime) -> None:
             if latest is None or latest.status != ServiceStatus.outage:
                 continue
             started = latest.started_at
-            if (now - started).total_seconds() < settings.delay_seconds:
+            elapsed = (now - started).total_seconds()
+            step = max(
+                (i for i, threshold in enumerate(schedule) if elapsed >= threshold),
+                default=None,
+            )
+            if step is None:
                 continue
-            if svc.voice_alerted_at is not None and svc.voice_alerted_at >= started:
+            last_step = svc.voice_last_step if svc.voice_last_step is not None else -1
+            if last_step >= step:
                 continue
-            triggered.append((svc, started))
+            triggered.append((svc, started, step))
 
         if not triggered:
             return
 
-        for svc, _started in triggered:
+        for svc, _started, step in triggered:
             svc.voice_alerted_at = now
+            svc.voice_last_step = step
         session.commit()
         entries = [
             {
                 "name": svc.name,
                 "domain": svc.site_url or svc.url or "",
                 "detail": (svc.last_detail or "").strip()[:300],
+                "seconds": int((now - started).total_seconds()),
                 "minutes": max(1, int((now - started).total_seconds() // 60)),
             }
-            for svc, started in triggered
+            for svc, started, _step in triggered
         ]
         minutes = min(e["minutes"] for e in entries)
+        highest_step = max(step for _svc, _started, step in triggered) + 1
 
-    _log.info("placing outage call for: %s", ", ".join(e["name"] for e in entries))
+    _log.info(
+        "placing outage call (escalation %d/%d) for: %s",
+        highest_step, len(schedule), ", ".join(e["name"] for e in entries),
+    )
     asyncio.create_task(_voice.place_outage_call(entries, minutes))
 
 
@@ -322,6 +337,7 @@ async def run_checks(db_engine) -> None:
                 if new_status != ServiceStatus.outage:
                     # A new outage episode starts from scratch.
                     svc.voice_alerted_at = None
+                    svc.voice_last_step = -1
                 if not muted:
                     status_changes.append((svc_name, prior_status.value, new_status.value, svc_url, detail))
             svc.status = new_status

@@ -114,8 +114,11 @@ Enable **Phone call (SIP + TTS)** in the admin UI and fill in the destination
 mobile number, the SIP account used as caller, and the delay. Then mark the
 services that should ring you with **Call on outage** (create/edit form).
 
-- One call is placed per outage episode, once the service has been in `outage`
-  for the configured delay (default 5 minutes). Recovery resets the episode.
+- Calls escalate on a configurable schedule (default `5m,30m,2h,6h,24h`):
+  one call when the outage crosses each step. Steps are persisted per service,
+  so check rounds and restarts never duplicate a call; if several steps are
+  skipped (e.g. a long restart), only the highest crossed step is called.
+  Recovery resets the episode.
 - Multiple services that cross the threshold in the same check round share one
   call.
 - The text is synthesized with Piper (neural TTS, `piper-tts` Python package)
