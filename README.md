@@ -119,8 +119,9 @@ services that should ring you with **Call on outage** (create/edit form).
 - Multiple services that cross the threshold in the same check round share one
   call.
 - The text is synthesized with `espeak-ng` (must be on `PATH`; the NixOS module
-  adds it) and streamed as G.711 over RTP. No SIP registration is performed —
-  registration would fork inbound calls away from the home phone.
+  adds it) and streamed as G.711 over RTP. The caller AOR is registered only
+  for the call (Vodafone's SBC rejects unregistered INVITEs) and unregistered
+  immediately afterwards with `Expires: 0`.
 - **Call me now (test)** in the admin UI places a test call with the saved
   settings.
 - SIP servers that publish `_sip._udp` SRV records are resolved automatically;

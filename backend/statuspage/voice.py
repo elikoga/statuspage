@@ -6,8 +6,10 @@ audio. TTS audio is produced by ``espeak-ng``, resampled to 8 kHz and encoded
 to G.711 in-process, so the only external runtime input is the espeak-ng
 binary.
 
-We never REGISTER: the statuspage only places outbound calls, and registering
-the same AOR as the home phone would fork/steal inbound calls.
+We register the caller AOR only for the duration of a call (Vodafone's SBC
+rejects INVITEs from unregistered contacts with "IP association no match"),
+using the same socket/Contact as the INVITE, then remove the binding with
+``Expires: 0`` immediately after the call.
 """
 
 from __future__ import annotations
@@ -47,6 +49,7 @@ _SIP_TIMEOUT = 12.0
 _RTP_PTIME = 0.020
 _RTP_PAYLOAD_BYTES = 160      # 20 ms of 8 kHz G.711
 _MAX_AUDIO_SECONDS = 60
+_REGISTER_EXPIRES = 900      # Vodafone's SBC enforces Min-Expires: 900
 
 
 @dataclasses.dataclass
@@ -519,6 +522,7 @@ def _send_request(
     auth_challenge: tuple[str, str] | None = None,
     auth_user: str = "",
     auth_password: str = "",
+    contact_expires: int | None = None,
 ) -> tuple[int, dict[str, list[str]], bytes, int]:
     branch = f"z9hG4bK{os.urandom(6).hex()}"
     headers = [
@@ -529,7 +533,9 @@ def _send_request(
         f"To: <{to_uri}>" + (f";tag={to_tag}" if to_tag else ""),
         f"Call-ID: {call_id}",
         f"CSeq: {cseq} {method}",
-        f"Contact: <sip:{from_uri[len('sip:'):].split('@')[0]}@{local_ip}:{local_port}>",
+        "Contact: <sip:"
+        f"{from_uri[len('sip:'):].split('@')[0]}@{local_ip}:{local_port}>"
+        + (f";expires={contact_expires}" if contact_expires is not None else ""),
         "User-Agent: statuspage-voice",
     ]
     for key, value in (extra_headers or {}).items():
@@ -574,6 +580,7 @@ def _send_request(
             auth_challenge=(name, challenge),
             auth_user=auth_user,
             auth_password=auth_password,
+            contact_expires=contact_expires,
         )
     return code, resp_headers, resp_body, cseq
 
@@ -605,6 +612,50 @@ def _send_rtp(
             time.sleep(delay)
 
 
+def _register(
+    sock: socket.socket,
+    dest: tuple[str, int],
+    settings: VoiceSettings,
+    local_ip: str,
+    local_port: int,
+    *,
+    call_id: str,
+    from_tag: str,
+    cseq: int,
+    expires: int,
+) -> tuple[int, int]:
+    """Register (or with ``expires=0`` unregister) the caller AOR."""
+    uri = f"sip:{settings.sip_number}@{settings.sip_registrar}"
+    code, headers, _body, used_cseq = _send_request(
+        sock,
+        dest,
+        "REGISTER",
+        uri,
+        local_ip=local_ip,
+        local_port=local_port,
+        call_id=call_id,
+        from_uri=uri,
+        to_uri=uri,
+        from_tag=from_tag,
+        to_tag=None,
+        cseq=cseq,
+        extra_headers={"Expires": str(expires)},
+        body="",
+        auth_user=settings.sip_auth_username,
+        auth_password=settings.sip_password,
+        contact_expires=expires,
+    )
+    if code == 423 and expires > 0:
+        match = re.search(r"\d+", " ".join(headers.get("min-expires", [])))
+        if match:
+            return _register(
+                sock, dest, settings, local_ip, local_port,
+                call_id=call_id, from_tag=from_tag,
+                cseq=used_cseq + 1, expires=max(int(match.group(0)), 1),
+            )
+    return code, used_cseq
+
+
 def _call_blocking(settings: VoiceSettings, pcm: bytes) -> None:
     target_ip, target_port = _resolve_sip_target(settings)
     dest = (target_ip, target_port)
@@ -612,6 +663,10 @@ def _call_blocking(settings: VoiceSettings, pcm: bytes) -> None:
 
     sip_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     rtp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    registered = False
+    reg_call_id = f"{os.urandom(8).hex()}@{local_ip}"
+    reg_tag = os.urandom(6).hex()
+    reg_cseq = 1
     try:
         sip_sock.bind((local_ip, 0))
         sip_sock.settimeout(_SIP_TIMEOUT)
@@ -630,6 +685,18 @@ def _call_blocking(settings: VoiceSettings, pcm: bytes) -> None:
         request_uri = to_uri
         call_id = f"{os.urandom(8).hex()}@{local_ip}"
         from_tag = os.urandom(6).hex()
+
+        # Vodafone's SBC rejects INVITEs from an unregistered AOR with
+        # "IP association no match, user not registered". Register first with
+        # the same socket/Contact, then remove the binding after the call.
+        reg_code, reg_cseq = _register(
+            sip_sock, dest, settings, local_ip, local_port,
+            call_id=reg_call_id, from_tag=reg_tag, cseq=reg_cseq,
+            expires=_REGISTER_EXPIRES,
+        )
+        if reg_code != 200:
+            raise RuntimeError(f"REGISTER rejected: {reg_code}")
+        registered = True
 
         sdp = _build_sdp(local_ip, rtp_port)
         code, headers, body, invite_cseq = _send_request(
@@ -711,5 +778,16 @@ def _call_blocking(settings: VoiceSettings, pcm: bytes) -> None:
         if bye_code >= 300:
             _log.warning("BYE returned %s", bye_code)
     finally:
+        if registered:
+            try:
+                unreg_code, _ = _register(
+                    sip_sock, dest, settings, local_ip, local_port,
+                    call_id=reg_call_id, from_tag=reg_tag, cseq=reg_cseq + 1,
+                    expires=0,
+                )
+                if unreg_code >= 300:
+                    _log.warning("SIP unregister returned %s", unreg_code)
+            except Exception as exc:  # noqa: BLE001
+                _log.warning("SIP unregister failed: %s", exc)
         sip_sock.close()
         rtp_sock.close()
