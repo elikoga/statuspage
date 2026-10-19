@@ -122,7 +122,7 @@ def _lang_base(language: str) -> str:
     return (language or "de").split("-")[0].split("_")[0].lower()
 
 
-_SPELLED_DOMAIN_WORDS = ("upb",)
+_SPELLED_DOMAIN_WORDS = ("upb", "de")
 
 
 def _speak_domain(domain: str, language: str) -> str:
