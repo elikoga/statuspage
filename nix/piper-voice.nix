@@ -9,7 +9,7 @@ stdenvNoCC.mkDerivation {
   # that consumes this derivation (the model file itself is unchanged).
   model = fetchurl {
     url = "https://huggingface.co/rhasspy/piper-voices/resolve/04ca88f5685ca5253c701af3687e155b113bd512/de/de_DE/thorsten/medium/de_DE-thorsten-medium.onnx";
-    hash = "sha256-fmR2LY5RGLtXjy7qYgfho1qODDBZUBC2ZvmD/Ie7eBk=";
+    hash = "sha256-/ScOs9Hr+R12P4oPlJsbG+vf766hjDqvhXfdNFNuBk8=";
   };
   config = fetchurl {
     url = "https://huggingface.co/rhasspy/piper-voices/resolve/04ca88f5685ca5253c701af3687e155b113bd512/de/de_DE/thorsten/medium/de_DE-thorsten-medium.onnx.json";
